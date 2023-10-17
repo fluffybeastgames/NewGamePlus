@@ -6,7 +6,6 @@ let pressedKeys = {};
 function loadApp() {
     console.log('loadApp() called');   
 
-
     let gameDiv = document.getElementById('game_div');
 
     let canvas = document.createElement('canvas');
@@ -23,19 +22,9 @@ function loadApp() {
 
     window.onkeyup = function(e) { pressedKeys[e.keyCode] = false; }
     window.onkeydown = function(e) { pressedKeys[e.keyCode] = true; }
-    // I can now check if any key is pressed anywhere else in the script by checking
-
-    // pressedKeys["code of the key"]
-
     
     game = new NewGamePlus(context);
-
-    
 }
-
-// class Square extends GameEntity {
-
-// }
 
 class GameEntity {
     constructor(context, type, x, y, width, height, color) {
@@ -53,8 +42,8 @@ class GameEntity {
         this.acc_x = 0; // acceleration
         this.acc_y = 0;
         
-        this.max_v_x = 3;
-        this.max_v_y = 3;
+        this.max_v_x = 4;
+        this.max_v_y = 4;
         
         this.max_acc_x = 1;
         this.max_acc_y = 1;
@@ -62,29 +51,6 @@ class GameEntity {
         // max_v_x, max_v_y, max_acc_x, max_acc_y
     }
 }
-
-// class Square extends GameEntity
-// {
-//     constructor (context, x, y, vx, vy){
-//         super(context, x, y, vx, vy);
-
-//         // Set default width and height
-//         this.width = 50;
-//         this.height = 50;
-//     }
-
-//     draw(){
-//         // Draw a simple square
-//         this.context.fillStyle = this.isColliding?'#ff8080':'#0099b0';
-//         this.context.fillRect(this.x, this.y, this.width, this.height);
-//     }
-
-//     update(secondsPassed){
-//         // Move with set velocity
-//         this.x += this.vx * secondsPassed;
-//         this.y += this.vy * secondsPassed;
-//     }
-// }
 
 
 class NewGamePlus {
@@ -118,17 +84,6 @@ class NewGamePlus {
         this.entities[3].v_y = 0;
         this.entities[3].acc_x = -.1;
         this.entities[3].acc_y = 0;
-
-        
-        
-        // let seed = Math.floor(Math.random()*10**8); // use a sufficiently random identifier for the generation
-        // this.seed_board(seed);
-    }
-
-    seed_board(seed) {
-        // TODO
-
-
     }
 }
 
@@ -162,6 +117,7 @@ function game_loop_client() {
         if (collisions.length > 0) {
             resolve_collisions(collisions);
         }
+
 
         
         // render
@@ -217,8 +173,8 @@ function positional_logic_update() {
         entity.v_x += entity.acc_x;
         entity.v_y += entity.acc_y;
         
-        entity.v_x *= .99;
-        entity.v_y *= .99;
+        entity.v_x *= .99; // drag
+        entity.v_y *= .99; // drag
         
 
         if(entity.v_x > entity.max_v_x) {
@@ -233,11 +189,9 @@ function positional_logic_update() {
             entity.v_y = -entity.max_v_y;
         }
 
-        // introduce drag
-        // entity.v_x *= .95;
-        // entity.v_y *= .95;
-        // entity.acc_x *= .75;
-        // entity.acc_y *= .75;
+        
+        // Wall bounce check
+        bouncy_wall_check(entity);
 
     });
 
@@ -259,11 +213,9 @@ function check_if_collision(entity1, entity2) {
     } else {
         return true;
     }
-
 }
 
 function collision_detection_update() {
-    // TODO
     let collisions = [];
 
     for (let i = 0; i < game.entities.length; i++) {
@@ -285,11 +237,46 @@ function resolve_collisions(collisions) {
         console.log('Resolving collision between ' + collisions[i][0].type + ' and ' + collisions[i][1].type);
         let entity1 = collisions[i][0];
         let entity2 = collisions[i][1];
+        let vCollision = {x: entity2.x - entity1.x, y: entity2.y - entity1.y};
+        let distance = Math.sqrt((entity2.x-entity1.x)*(entity2.x-entity1.x) + (entity2.y-entity1.y)*(entity2.y-entity1.y));
+        let vCollisionNorm = {x: vCollision.x / distance, y: vCollision.y / distance};
+        let vRelativeVelocity = {x: entity1.v_x - entity2.v_x, y: entity1.v_y - entity2.v_y};
+        let speed = vRelativeVelocity.x * vCollisionNorm.x + vRelativeVelocity.y * vCollisionNorm.y;
+        if (speed < 0) {
+            break;
+        }
+        entity1.v_x -= (speed * vCollisionNorm.x);
+        entity1.v_y -= (speed * vCollisionNorm.y);
+        entity2.v_x += (speed * vCollisionNorm.x);
+        entity2.v_y += (speed * vCollisionNorm.y);
 
-        // if 
     }
 }
 
+
+function bouncy_wall_check(entity) {
+    if (entity.x < 0) {
+        entity.x = 0;
+        entity.v_x *= -.5;
+        entity.acc_x *= -.2;
+    }
+    if (entity.x + entity.width > 800) {
+        entity.x = 800 - entity.width;
+        entity.v_x *= -.5;
+        entity.acc_x *= -.2;
+    }
+    if (entity.y < 0) {
+        entity.y = 0;
+        entity.v_y *= -.5;
+        entity.acc_y *= -.2;
+    }
+    if (entity.y + entity.height > 600) {
+        entity.y = 600 - entity.height;
+        entity.v_y *= -.5;
+        entity.acc_y *= -.2;
+    }
+
+}
 
 
 function render_board() {    
@@ -306,40 +293,6 @@ function render_board() {
         context.fillRect(entity.x, entity.y, entity.width, entity.height);
     });
 
-    // // Draw each gridline and object on the canvas
-    // for (let i = 0; i < cells_client.length; i++) {
-    //     cells_client[i].draw_cell();
-    // }
-
-    // if (game_state_data) {
-    //     if(game_state_data.game.state==="true") {
-    //         //Add the highlights around the active cell (if present)
-    //         highlight_active_cell()
-
-    //         // Draw arrows over each square containig one or more queued moves
-    //         local_move_queue.forEach(move => {
-    //             let id;
-    //             id = move.row * game_data.game.n_cols + move.col; // id 0 is the topleft most cells, and there num_cols cols per row        
-    //             cells_client[id].draw_arrow(move.dir, move.action);
-    //         }); 
-    //     } else {
-    //         context.fillStyle = '#FFFFFF';
-    //         context.fillRect(canvas.width/4, canvas.height/4, canvas.width/2, canvas.height/2);
-    //         context.fillStyle = '#000000';
-    //         context.font = `${font_size*2}px serif`;
-    //         context.textAlign = 'center';
-    //         context.fillText("Game Over!", canvas.width/2  , canvas.height/2);
-    //         context.font = `${font_size}px serif`;
-    //         context.fillText("Click anywhere to return to the lobby", canvas.width/2  , canvas.height/2 + font_size*3);
-            
-    //     }
-    // }   
-
-    // // display the turn number
-    // if (game_tick_local) {
-    //     // document.getElementById('turn_counter').innerText = `Turn ${game_tick_local}`
-    //     document.getElementById('turn-counter-scoreboard').innerText = `Turn ${game_tick_local}`
-    // }    
 }
 
 
