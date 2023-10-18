@@ -10,30 +10,26 @@ function loadApp() {
 
     let canvas = document.createElement('canvas');
     canvas.id = 'gameCanvas';
-    canvas.width = 800;
-    canvas.height = 600;
-    canvas.style.border = '1px solid red';
+    canvas.width = 1000;
+    canvas.height = 700;
+    canvas.style.border = '2px solid black';
     canvas.style.position = 'absolute'; 
     canvas.style.zIndex = '-1'; // set to a low z index to make overlapping elements cover the canvas
     
-    let context = canvas.getContext('2d');
-
     gameDiv.appendChild(canvas);
 
     window.onkeyup = function(e) { pressedKeys[e.keyCode] = false; }
     window.onkeydown = function(e) { pressedKeys[e.keyCode] = true; }
     
-    game = new NewGamePlus(context);
+    game = new NewGamePlus(canvas);
 }
 
 class GameEntity {
-    constructor(context, type, x, y, width, height, color) {
+    constructor(context, type, x, y, color) {
         this.context = context;
         this.type = type;
         this.x = x;
         this.y = y;
-        this.width = width;
-        this.height = height;
         this.color = color;
 
         this.v_x = 0; // velocity
@@ -52,18 +48,173 @@ class GameEntity {
     }
 }
 
+class Square extends GameEntity {
+    constructor(context, x, y, width, height, color) {
+        super(context, 'square', x, y, color);
+        
+        this.width = width;
+        this.height = height;
+        
+    }
+
+    update_position(timePassed) {
+        // this.x += this.vx * timePassed;
+        // this.y += this.vy * timePassed;
+
+        this.x += this.v_x;
+        this.y += this.v_y;
+            
+        this.v_x += this.acc_x;
+        this.v_y += this.acc_y;
+        
+        this.v_x *= .99; // drag
+        this.v_y *= .99; // drag
+        
+
+        if(this.v_x > this.max_v_x) {
+            this.v_x = this.max_v_x;
+        } else if(this.v_x < -this.max_v_x) {
+            this.v_x = -this.max_v_x;
+        }
+
+        if(this.v_y > this.max_v_y) {
+            this.v_y = this.max_v_y;
+        } else if (this.v_y < -this.max_v_y) {
+            this.v_y = -this.max_v_y;
+        }
+
+        // Wall bounce check
+        this.bouncy_wall_check();
+    }
+
+    draw() {
+        this.context.fillStyle = this.color;
+        this.context.fillRect(this.x, this.y, this.width, this.height);
+        
+    }
+
+    bouncy_wall_check() {
+        if (this.x < 0) {
+            this.x = 0;
+            this.v_x *= -.5;
+            this.acc_x *= -.2;
+        }
+        if (this.x + this.width > game.canvas.width) {
+            this.x = game.canvas.width - this.width;
+            this.v_x *= -.5;
+            this.acc_x *= -.2;
+        }
+        if (this.y < 0) {
+            this.y = 0;
+            this.v_y *= -.5;
+            this.acc_y *= -.2;
+        }
+        if (this.y + this.height > game.canvas.height) {
+            this.y = game.canvas.height - this.height;
+            this.v_y *= -.5;
+            this.acc_y *= -.2;
+        }
+
+    }
+    
+}
+
+
+class Circle extends GameEntity {
+    constructor(context, x, y, diameter, color) {
+        super(context, 'circle', x, y, color);
+        
+        this.diameter = diameter;        
+        this.radius = diameter/2;
+    }
+
+    update_position(timePassed) {
+        // this.x += this.vx * timePassed;
+        // this.y += this.vy * timePassed;
+
+        this.x += this.v_x;
+        this.y += this.v_y;
+            
+        this.v_x += this.acc_x;
+        this.v_y += this.acc_y;
+        
+        this.v_x *= .995; // drag
+        this.v_y *= .995; // drag
+        
+
+        if(this.v_x > this.max_v_x) {
+            this.v_x = this.max_v_x;
+        } else if(this.v_x < -this.max_v_x) {
+            this.v_x = -this.max_v_x;
+        }
+
+        if(this.v_y > this.max_v_y) {
+            this.v_y = this.max_v_y;
+        } else if (this.v_y < -this.max_v_y) {
+            this.v_y = -this.max_v_y;
+        }
+
+        this.bouncy_wall_check();
+    }
+
+    draw() {
+        this.context.beginPath();
+        this.context.arc(this.x, this.y, this.diameter/2, 0, 2 * Math.PI, false);
+        this.context.fillStyle = this.color;
+        this.context.fill();
+        this.context.lineWidth = 1;
+        this.context.strokeStyle = '#003300';
+        this.context.stroke();
+    }
+
+    bouncy_wall_check() {
+        if (this.x < this.radius) {
+            this.x = this.radius;
+            this.v_x *= -.5;
+            this.acc_x *= -.2;
+        }
+        if (this.x + this.radius > game.canvas.width) {
+            this.x = game.canvas.width - this.radius;
+            this.v_x *= -.5;
+            this.acc_x *= -.2;
+        }
+        if (this.y < this.radius) {
+            this.y = this.radius;
+            this.v_y *= -.5;
+            this.acc_y *= -.2;
+        }
+        if (this.y + this.radius > game.canvas.height) {
+            this.y = game.canvas.height - this.radius;
+            this.v_y *= -.5;
+            this.acc_y *= -.2;
+        }
+    }
+    
+}
+
 
 class NewGamePlus {
-    constructor(context) {
+    constructor(canvas) {        
         this.id = -1;
-        ////
+        this.canvas = canvas;
+        let context = canvas.getContext('2d');
 
         this.entities = [];
-        this.entities.push(new GameEntity(context, 'player 1', 0, 0, 20, 20, '#DD0000'));
-        this.entities.push(new GameEntity(context, 'bot 1', 0, 50, 50, 50, '#BBFF00'));
-        this.entities.push(new GameEntity(context, 'barrier 1', 25, 175, 25, 25, '#0000BB'));
-        this.entities.push(new GameEntity(context, 'bot 2', 500, 200, 25, 25, '#0000BB'));
-        this.entities.push(new GameEntity(context, 'barrier 2', 200, 300, 250, 10, '#0000BB'));
+        this.entities.push(new Circle(context, 0, 0, 25, '#DD0000'));
+        // this.entities.push(new Square(context, 0, 0, 20, 20, '#DD0000'));
+        this.entities.push(new Square(context, 0, 50, 50, 50, '#BBFF00'));
+        this.entities.push(new Square(context, 25, 175, 25, 25, '#0000BB'));
+        this.entities.push(new Square(context, 500, 200, 25, 25, '#0000BB'));
+        this.entities.push(new Square(context, 200, 300, 250, 10, '#0000BB'));
+        this.entities.push(new Square(context, 500, 300, 50, 50, '#00BB00'));
+        this.entities.push(new Circle(context, 500, 100, 15, '#00BBBB'));
+        this.entities.push(new Circle(context, 500, 200, 25, '#00BBBB'));
+        this.entities.push(new Circle(context, 500, 300, 35, '#00BBBB'));
+        this.entities.push(new Circle(context, 500, 400, 45, '#00BBBB'));
+        this.entities.push(new Circle(context, 500, 500, 55, '#00BBBB'));
+        this.entities.push(new Circle(context, 0, 200, 15, '#444444'));
+        this.entities.push(new Circle(context, 0, 250, 15, '#444444'));
+        this.entities.push(new Circle(context, 0, 300, 15, '#444444'));
         
         this.entities[0].v_x = 1;
         this.entities[0].v_y = 1;
@@ -80,10 +231,23 @@ class NewGamePlus {
         this.entities[2].acc_x = 0;
         this.entities[2].acc_y = 0;
 
-        this.entities[3].v_x = 0;
-        this.entities[3].v_y = 0;
-        this.entities[3].acc_x = -.1;
-        this.entities[3].acc_y = 0;
+        this.entities[3].v_x = 1;
+        this.entities[3].v_y = -1;
+        this.entities[3].acc_x = -.05;
+        this.entities[3].acc_y = .01;
+        
+        this.entities[5].acc_y = 1;
+        this.entities[5].acc_x = .01;
+        
+        this.entities[6].v_y = 0;
+        this.entities[6].acc_y = 0;
+
+        this.entities[11].v_y = .5;
+        this.entities[12].v_y = .75;
+        this.entities[13].v_y = 1;
+        
+        
+        
     }
 }
 
@@ -118,8 +282,6 @@ function game_loop_client() {
             resolve_collisions(collisions);
         }
 
-
-        
         // render
         render_board(); // Redraw the game canvas        
     }
@@ -144,16 +306,16 @@ function process_user_input() {
     game.entities[0].acc_x = 0;
     game.entities[0].acc_y = 0;
     
-    if (pressedKeys[87]) { // W
+    if (pressedKeys[87] | pressedKeys[38]) { // W | Up
         game.entities[0].acc_y = -.05;
     }
-    if (pressedKeys[65]) { // A
+    if (pressedKeys[65] | pressedKeys[37]) { // A | Left
         game.entities[0].acc_x = -.05;
     }
-    if (pressedKeys[83]) { // S
+    if (pressedKeys[83] | pressedKeys[40]) { // S | Down
         game.entities[0].acc_y = .05;
     }
-    if (pressedKeys[68]) { // D
+    if (pressedKeys[68] | pressedKeys[39]) { // D | Right
         game.entities[0].acc_x = .05;
     }
 
@@ -167,37 +329,27 @@ function positional_logic_update() {
     console.log('positional_logic_update() called');
     
     game.entities.forEach(entity => {
-        entity.x += entity.v_x;
-        entity.y += entity.v_y;
-            
-        entity.v_x += entity.acc_x;
-        entity.v_y += entity.acc_y;
-        
-        entity.v_x *= .99; // drag
-        entity.v_y *= .99; // drag
-        
-
-        if(entity.v_x > entity.max_v_x) {
-            entity.v_x = entity.max_v_x;
-        } else if(entity.v_x < -entity.max_v_x) {
-            entity.v_x = -entity.max_v_x;
-        }
-
-        if(entity.v_y > entity.max_v_y) {
-            entity.v_y = entity.max_v_y;
-        } else if (entity.v_y < -entity.max_v_y) {
-            entity.v_y = -entity.max_v_y;
-        }
-
-        
-        // Wall bounce check
-        bouncy_wall_check(entity);
-
+        entity.update_position(1)
     });
 
 }
 
 function check_if_collision(entity1, entity2) {
+    if (entity1.type == 'square' && entity2.type == 'square') {
+        return square_collision_check(entity1, entity2);
+    } else if (entity1.type == 'circle' && entity2.type == 'circle') {  
+        return circle_collision_check(entity1, entity2);
+    } else if (entity1.type == 'circle' && entity2.type == 'square') {
+        return circle_rectangle_collision_check(entity1, entity2);
+    } else if (entity1.type == 'square' && entity2.type == 'circle') {
+        return circle_rectangle_collision_check(entity2, entity1);
+    } else {
+        return false;
+    }
+}
+
+function square_collision_check(entity1, entity2) {
+
     let l1 = entity1.x;
     let t1 = entity1.y;
     let r1 = entity1.x + entity1.width;
@@ -213,6 +365,32 @@ function check_if_collision(entity1, entity2) {
     } else {
         return true;
     }
+}
+
+
+function circle_collision_check(entity1, entity2) {
+
+    // Calculate the distance between the two circles
+    let squareDistance = (entity1.x-entity2.x)**2 + (entity1.y-entity2.y)**2;
+
+    // When the distance is smaller or equal to the sum
+    // of the two radius, the circles touch or overlap
+    return squareDistance <= (entity1.diameter/2 + entity2.diameter/2)**2;
+}
+
+function circle_rectangle_collision_check(circle, rectangle) {
+    let distance_x = Math.abs(circle.x - (rectangle.x + rectangle.width/2));
+    let distance_y = Math.abs(circle.y - (rectangle.y + rectangle.height/2));
+
+    if (distance_x > (rectangle.width/2 + circle.radius)) { return false; }
+    if (distance_y > (rectangle.height/2 + circle.radius)) { return false; }
+
+    if (distance_x <= (rectangle.width/2)) { return true; } 
+    if (distance_y <= (rectangle.height/2)) { return true; }
+
+    let distance_corner = (distance_x - rectangle.width/2)**2 + (distance_y - rectangle.height/2)**2;
+
+    return (distance_corner <= (circle.radius**2));
 }
 
 function collision_detection_update() {
@@ -254,29 +432,6 @@ function resolve_collisions(collisions) {
 }
 
 
-function bouncy_wall_check(entity) {
-    if (entity.x < 0) {
-        entity.x = 0;
-        entity.v_x *= -.5;
-        entity.acc_x *= -.2;
-    }
-    if (entity.x + entity.width > 800) {
-        entity.x = 800 - entity.width;
-        entity.v_x *= -.5;
-        entity.acc_x *= -.2;
-    }
-    if (entity.y < 0) {
-        entity.y = 0;
-        entity.v_y *= -.5;
-        entity.acc_y *= -.2;
-    }
-    if (entity.y + entity.height > 600) {
-        entity.y = 600 - entity.height;
-        entity.v_y *= -.5;
-        entity.acc_y *= -.2;
-    }
-
-}
 
 
 function render_board() {    
@@ -289,8 +444,7 @@ function render_board() {
     
     // Draw each entity on the canvas
     game.entities.forEach(entity => {
-        context.fillStyle = entity.color;
-        context.fillRect(entity.x, entity.y, entity.width, entity.height);
+        entity.draw();
     });
 
 }
