@@ -2,21 +2,83 @@
 const RENDER_REFRESH_TIME = 16; // time in ms to wait after rendering before rendering. Due to how setTimeout works, may be up to 16 ms late
 let game;
 let pressedKeys = {};
+let canvas;
 
 function loadApp() {
     console.log('loadApp() called');   
 
     let gameDiv = document.getElementById('game_div');
 
-    let canvas = document.createElement('canvas');
+    canvas = document.createElement('canvas');
     canvas.id = 'gameCanvas';
-    canvas.width = 1000;
-    canvas.height = 700;
+    canvas.width = 1800;
+    canvas.height = 900;
     canvas.style.border = '2px solid black';
     canvas.style.position = 'absolute'; 
     canvas.style.zIndex = '-1'; // set to a low z index to make overlapping elements cover the canvas
+    canvas.style.left = '50px';
+    canvas.style.top = '150px';
     
+
+    addEventListener('mousedown',function(e) { 
+        e.preventDefault();
+        // console.log('mouse down');
+        // console.log(e);
+        
+        if (e.button == 0) { //left click
+            let mousePos = get_mouse_position(canvas, e);
+            console.log(mousePos)
+            // game.entities.push(new OreBullet(canvas.getContext('2d'), mousePos['x'], mousePos['y'], 10, 10, '#008888'));
+            game.entities.push(new OreBullet(canvas.getContext('2d'), game.entities[0].x, game.entities[0].y, mousePos['x'], mousePos['y'], 10, 10, '#008888'));
+        };
+
+        function get_mouse_position(canvas, event) {
+            let rect = canvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+                
+            };
+        }
+    });
+
     gameDiv.appendChild(canvas);
+    
+    //Add score readout
+    //Add score for each player
+    //Left player
+    let scoreDivLeft = document.createElement('div');
+    scoreDivLeft.id = 'scoreDivLeft';
+    scoreDivLeft.style.position = 'absolute';
+    scoreDivLeft.style.top = '0px';
+    scoreDivLeft.style.left = '0px';
+    scoreDivLeft.style.width = canvas.width/2;
+    scoreDivLeft.style.height = '100%';
+    scoreDivLeft.style.zIndex = '1';
+    scoreDivLeft.style.fontSize = '24px';
+    scoreDivLeft.style.fontFamily = 'Arial';
+    scoreDivLeft.style.textAlign = 'center';
+    scoreDivLeft.style.verticalAlign = 'middle';
+    scoreDivLeft.innerHTML = 'Score: 0';
+    gameDiv.appendChild(scoreDivLeft);
+
+    //Right player
+    let scoreDivRight = document.createElement('div');
+    scoreDivRight.id = 'scoreDivRight';
+    scoreDivRight.style.position = 'absolute';
+    scoreDivRight.style.top = '0px';
+    scoreDivRight.style.right = '0px';
+    scoreDivRight.style.width = canvas.width/2;
+    scoreDivRight.style.height = '100%';
+    scoreDivRight.style.zIndex = '1';
+    scoreDivRight.style.fontSize = '24px';
+    scoreDivRight.style.fontFamily = 'Arial';
+    scoreDivRight.style.textAlign = 'center';
+    scoreDivRight.style.verticalAlign = 'middle';
+    scoreDivRight.innerHTML = 'Score: 0';
+    gameDiv.appendChild(scoreDivRight);
+
+    //Add debug readout
 
     window.onkeyup = function(e) { pressedKeys[e.keyCode] = false; }
     window.onkeydown = function(e) { pressedKeys[e.keyCode] = true; }
@@ -25,9 +87,10 @@ function loadApp() {
 }
 
 class GameEntity {
-    constructor(context, type, x, y, color) {
+    constructor(context, type, shape, x, y, color) {
         this.context = context;
         this.type = type;
+        this.shape = shape;
         this.x = x;
         this.y = y;
         this.color = color;
@@ -38,8 +101,8 @@ class GameEntity {
         this.acc_x = 0; // acceleration
         this.acc_y = 0;
         
-        this.max_v_x = 4;
-        this.max_v_y = 4;
+        this.max_v_x = 5;
+        this.max_v_y = 5;
         
         this.max_acc_x = 1;
         this.max_acc_y = 1;
@@ -48,9 +111,10 @@ class GameEntity {
     }
 }
 
+
 class Square extends GameEntity {
     constructor(context, x, y, width, height, color) {
-        super(context, 'square', x, y, color);
+        super(context, 'square', 'square', x, y, color);
         
         this.width = width;
         this.height = height;
@@ -119,10 +183,73 @@ class Square extends GameEntity {
     
 }
 
+class OreBullet extends Square {
+    constructor(context, x, y, dest_x, dest_y, width, height, color) {
+        super(context, x, y, width, height, color);
+        
+        let bullet_speed = 5;
+
+        // let bullet_angle = Math.atan2(dest_y - this.y, dest_x - this.x) * 180 / Math.PI;
+        // this.v_x = bullet_speed * Math.cos(bullet_angle* Math.PI / 180);
+        // this.v_y = bullet_speed * Math.sin(bullet_angle* Math.PI / 180);
+
+        let bullet_angle = Math.atan2(dest_y - this.y, dest_x - this.x);
+        this.v_x = bullet_speed * Math.cos(bullet_angle);
+        this.v_y = bullet_speed * Math.sin(bullet_angle);
+    }
+
+    update_position(timePassed) {
+        // this.x += this.vx * timePassed;
+        // this.y += this.vy * timePassed;
+
+        this.x += this.v_x;
+        this.y += this.v_y;
+
+        if(this.v_x > this.max_v_x) {
+            this.v_x = this.max_v_x;
+        } else if(this.v_x < -this.max_v_x) {
+            this.v_x = -this.max_v_x;
+        }
+
+        if(this.v_y > this.max_v_y) {
+            this.v_y = this.max_v_y;
+        } else if (this.v_y < -this.max_v_y) {
+            this.v_y = -this.max_v_y;
+        }
+
+        // Wall bounce check
+        this.bouncy_wall_check();
+    }
+
+    bouncy_wall_check() {
+        if (this.x < 0) {
+            this.x = 0;
+            this.v_x *= -1;
+            this.acc_x *= -1;
+        }
+        if (this.x + this.width > game.canvas.width) {
+            this.x = game.canvas.width - this.width;
+            this.v_x *= -1;
+            this.acc_x *= -1;
+        }
+        if (this.y < 0) {
+            this.y = 0;
+            this.v_y *= -1;
+            this.acc_y *= -1;
+        }
+        if (this.y + this.height > game.canvas.height) {
+            this.y = game.canvas.height - this.height;
+            this.v_y *= -1;
+            this.acc_y *= -1;
+        }
+
+    }
+}
+
 
 class Circle extends GameEntity {
     constructor(context, x, y, diameter, color) {
-        super(context, 'circle', x, y, color);
+        super(context, 'circle', 'circle', x, y, color);
         
         this.diameter = diameter;        
         this.radius = diameter/2;
@@ -192,6 +319,158 @@ class Circle extends GameEntity {
     
 }
 
+class GamePlayer extends Circle {
+    constructor(context, x, y, color) {
+        let diameter = 33;
+        super(context, x, y, diameter, color);
+        
+        this.score = 0;
+        this.score_multiplier = 1;
+        this.score_multiplier_max = 5;
+        this.score_multiplier_growth_rate = .05;
+        this.score_multiplier_decay_rate = .01;
+        this.score_multiplier_decay_delay = 1000; // ms
+        this.score_multiplier_decay_delay_counter = 0;
+    }
+
+}
+
+
+class Ore extends GameEntity {
+    constructor(context, x, y, color, ore_points_initial) {
+        super(context, 'ore', 'circle', x, y, color);
+        
+        this.spawn_x = x; // where the ore spawns/ respawns
+        this.spawn_y = y;
+
+        this.ore_growth_rate = .05; // ore points per second
+        this.ore = ore_points_initial;
+        this.ore_points_max = 50;
+       
+        this.point_size_ratio = 1.5; // how many pixels per ore point
+        this.diameter = this.ore * this.point_size_ratio;        
+        this.radius = this.diameter/2;
+        
+    }
+
+    update_position(timePassed) {
+        // this.x += this.vx * timePassed;
+        // this.y += this.vy * timePassed;
+
+        if (this.x == this.spawn_x && this.y == this.spawn_y) {
+            this.ore += this.ore_growth_rate * timePassed;
+
+            if (this.ore > this.ore_points_max) {
+                this.ore = this.ore_points_max;
+            };    
+        }
+        
+        this.diameter = this.ore * this.point_size_ratio; 
+        this.radius = this.diameter/2;
+
+        this.x += this.v_x;
+        this.y += this.v_y;
+            
+        this.v_x += this.acc_x;
+        this.v_y += this.acc_y;
+        
+        this.v_x *= .995; // drag
+        this.v_y *= .995; // drag
+        
+
+        if(this.v_x > this.max_v_x) {
+            this.v_x = this.max_v_x;
+        } else if(this.v_x < -this.max_v_x) {
+            this.v_x = -this.max_v_x;
+        }
+
+        if(this.v_y > this.max_v_y) {
+            this.v_y = this.max_v_y;
+        } else if (this.v_y < -this.max_v_y) {
+            this.v_y = -this.max_v_y;
+        }
+
+        this.bouncy_wall_check();
+
+
+    }
+
+    draw() {
+        this.context.beginPath();
+        this.context.arc(this.x, this.y, this.diameter/2, 0, 2 * Math.PI, false);
+        this.context.fillStyle = this.color;
+        this.context.fill();
+        this.context.lineWidth = 1;
+        this.context.strokeStyle = '#003300';
+        this.context.stroke();
+
+        this.context.font = '14px';
+        this.context.fillStyle = 'black';
+        this.context.textAlign = 'center';
+        this.context.fillText(Math.round(this.ore), this.x, this.y);
+
+    }
+
+    bouncy_wall_check() {
+        if (this.x < this.radius) {
+            this.x = this.radius;
+            this.v_x *= 0;
+            this.acc_x *= -.2;
+        }
+        if (this.x + this.radius > game.canvas.width) {
+            this.x = game.canvas.width - this.radius;
+            this.v_x *= 0;
+            this.acc_x *= -.2;
+        }
+        if (this.y < this.radius) {
+            this.y = this.radius;
+            this.v_y *= .5;
+            this.acc_y *= -.2;
+        }
+        if (this.y + this.radius > game.canvas.height) {
+            this.y = game.canvas.height - this.radius;
+            this.v_y *= .5;
+            this.acc_y *= -.2;
+        }
+    }
+
+    score_check() {
+        // check if ore is inside of the goal zones
+        // if so, add points to the player's score
+        // and shrink the ore
+        if (this.x <= 50) {
+            let ore_to_transfer = Math.min(this.ore, .3);
+            this.ore -= ore_to_transfer;
+            
+            game.entities[0].score += ore_to_transfer;
+
+        }
+        if (this.x >= 1750) { //TODO magic number
+            let ore_to_transfer = Math.min(this.ore, .3);
+            this.ore -= ore_to_transfer;
+            
+            game.entities[1].score += ore_to_transfer;
+
+        }
+        
+        this.diameter = this.ore * this.point_size_ratio; 
+        this.radius = this.diameter/2;
+
+        if(this.ore <= 0) {
+            this.x = this.spawn_x;
+            this.y = this.spawn_y;
+        
+            this.v_x = 0;
+            this.v_y = 0;
+
+            this.acc_x = 0;
+            this.acc_y = 0;
+        }
+    }
+    
+}
+
+
 
 class NewGamePlus {
     constructor(canvas) {        
@@ -200,54 +479,16 @@ class NewGamePlus {
         let context = canvas.getContext('2d');
 
         this.entities = [];
-        this.entities.push(new Circle(context, 0, 0, 25, '#DD0000'));
+        this.entities.push(new GamePlayer(context, 50, 450, '#DD0000'));
+        this.entities.push(new GamePlayer(context, 1750, 450, '#0000DD'));
         // this.entities.push(new Square(context, 0, 0, 20, 20, '#DD0000'));
-        this.entities.push(new Square(context, 0, 50, 50, 50, '#BBFF00'));
-        this.entities.push(new Square(context, 25, 175, 25, 25, '#0000BB'));
-        this.entities.push(new Square(context, 500, 200, 25, 25, '#0000BB'));
-        this.entities.push(new Square(context, 200, 300, 250, 10, '#0000BB'));
-        this.entities.push(new Square(context, 500, 300, 50, 50, '#00BB00'));
-        this.entities.push(new Circle(context, 500, 100, 15, '#00BBBB'));
-        this.entities.push(new Circle(context, 500, 200, 25, '#00BBBB'));
-        this.entities.push(new Circle(context, 500, 300, 35, '#00BBBB'));
-        this.entities.push(new Circle(context, 500, 400, 45, '#00BBBB'));
-        this.entities.push(new Circle(context, 500, 500, 55, '#00BBBB'));
-        this.entities.push(new Circle(context, 0, 200, 15, '#444444'));
-        this.entities.push(new Circle(context, 0, 250, 15, '#444444'));
-        this.entities.push(new Circle(context, 0, 300, 15, '#444444'));
-        
-        this.entities[0].v_x = 1;
-        this.entities[0].v_y = 1;
-        this.entities[0].acc_x = .05;
-        this.entities[0].acc_y = .05;
-
-        this.entities[1].v_x = 1;
-        this.entities[1].v_y = 1;
-        this.entities[1].acc_x = .025;
-        this.entities[1].acc_y = .025;
-
-        this.entities[2].v_x = 0;
-        this.entities[2].v_y = 0;
-        this.entities[2].acc_x = 0;
-        this.entities[2].acc_y = 0;
-
-        this.entities[3].v_x = 1;
-        this.entities[3].v_y = -1;
-        this.entities[3].acc_x = -.05;
-        this.entities[3].acc_y = .01;
-        
-        this.entities[5].acc_y = 1;
-        this.entities[5].acc_x = .01;
-        
-        this.entities[6].v_y = 0;
-        this.entities[6].acc_y = 0;
-
-        this.entities[11].v_y = .5;
-        this.entities[12].v_y = .75;
-        this.entities[13].v_y = 1;
-        
-        
-        
+        this.entities.push(new Ore(context, 900, 150, '#00BBBB', .1));
+        this.entities.push(new Ore(context, 900, 300, '#00BBBB', .1));
+        this.entities.push(new Ore(context, 900, 450, '#00BBBB', .1));
+        this.entities.push(new Ore(context, 900, 600, '#00BBBB', .1));
+        this.entities.push(new Ore(context, 900, 750, '#00BBBB', .1));
+        // this.entities.push(new Circle(context, 0, 200, 15, '#444444'));
+  
     }
 }
 
@@ -271,6 +512,8 @@ function game_loop_client() {
 
         // game logic 
         
+        ore_score_check(); // apply scores to players for ore inside of the goal zones and shrink the ore
+        
         // positional logic
         positional_logic_update();
 
@@ -284,6 +527,7 @@ function game_loop_client() {
 
         // render
         render_board(); // Redraw the game canvas        
+        render_score(); // Redraw the score
     }
     setTimeout( () => { window.requestAnimationFrame(() => game_loop_client()); }, RENDER_REFRESH_TIME) // therefore each game loop will last at least tick_time ms    
 }
@@ -319,11 +563,21 @@ function process_user_input() {
         game.entities[0].acc_x = .05;
     }
 
-
-
 }
 
+function ore_score_check() {  
+    game.entities.forEach(entity => {
+        if (entity.type == 'ore' | entity.type == 'ore_bullet') {
+            // check if ore is inside of the goal zones
+            // if so, add points to the player's score
+            // and shrink the ore
+            entity.score_check();
+           
 
+        };
+    });
+
+}
 function positional_logic_update() {
     // Update the position of each entity
     console.log('positional_logic_update() called');
@@ -335,13 +589,13 @@ function positional_logic_update() {
 }
 
 function check_if_collision(entity1, entity2) {
-    if (entity1.type == 'square' && entity2.type == 'square') {
+    if (entity1.shape == 'square' && entity2.shape == 'square') {
         return square_collision_check(entity1, entity2);
-    } else if (entity1.type == 'circle' && entity2.type == 'circle') {  
+    } else if (entity1.shape == 'circle' && entity2.shape == 'circle') {  
         return circle_collision_check(entity1, entity2);
-    } else if (entity1.type == 'circle' && entity2.type == 'square') {
+    } else if (entity1.shape == 'circle' && entity2.shape == 'square') {
         return circle_rectangle_collision_check(entity1, entity2);
-    } else if (entity1.type == 'square' && entity2.type == 'circle') {
+    } else if (entity1.shape == 'square' && entity2.shape == 'circle') {
         return circle_rectangle_collision_check(entity2, entity1);
     } else {
         return false;
@@ -409,7 +663,7 @@ function collision_detection_update() {
 }
 
 function resolve_collisions(collisions) {   
-    // TODO
+    // TODO - make this work with both circles and squares
     for (let i = 0; i < collisions.length; i++) {
 
         console.log('Resolving collision between ' + collisions[i][0].type + ' and ' + collisions[i][1].type);
@@ -442,10 +696,52 @@ function render_board() {
     context.fillStyle= '#EEEEEE';  
     context.fillRect(0, 0, canvas.width, canvas.height); // Clear the board
     
+    // Draw the grid
+    context.strokeStyle = '#CCCCCC';
+    context.lineWidth = 1;
+    for (let i = 0; i < canvas.width; i += 50) {
+        context.beginPath();
+        context.moveTo(i, 0);
+        context.lineTo(i, canvas.height);
+        context.stroke();
+    }
+    for (let i = 0; i < canvas.height; i += 50) {
+        context.beginPath();
+        context.moveTo(0, i);
+        context.lineTo(canvas.width, i);
+        context.stroke();
+    }
+
+    //Draw goal lines
+    context.strokeStyle = '#000000';
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(50, 0);
+    context.lineTo(50, canvas.height);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(canvas.width-50, 0);
+    context.lineTo(canvas.width-50, canvas.height);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(canvas.width/2, 0);
+    context.lineTo(canvas.width/2, canvas.height);
+    context.stroke();
+    
+
     // Draw each entity on the canvas
     game.entities.forEach(entity => {
         entity.draw();
     });
+
+}
+
+function render_score() {
+    let scoreDivLeft = document.getElementById('scoreDivLeft');
+    let scoreDivRight = document.getElementById('scoreDivRight');
+    scoreDivLeft.innerHTML = 'Score: ' + Math.round(game.entities[0].score);
+    scoreDivRight.innerHTML = 'Score: ' + Math.round(game.entities[1].score);
+
 
 }
 
