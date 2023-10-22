@@ -4,10 +4,19 @@ let game;
 let pressedKeys = {};
 let canvas;
 let botAgent; // the test bot agent that will be used to play the game
+let botAgent2;
+let botAgent3;
+let botAgent4;
+let botAgent5;
+let botAgent6;
+let botAgent7;
+
 
 let END_ZONE_WIDTH = 100;
 let CANVAS_WIDTH = 1800;
 let CANVAS_HEIGHT = 900;
+
+const BULLET_SPEED = 10;
 
 function loadApp() {
     console.log('loadApp() called');   
@@ -108,7 +117,18 @@ function loadApp() {
     
     game = new NewGamePlus(canvas);
 
-    botAgent = new BotAgent();
+    // Enemy bots
+    botAgent = new BotAgent(1, true); //pass it the entity_id for the corresponding GamePlayer entity
+    botAgent2 = new BotAgent(7, true); //pass it the entity_id for the corresponding GamePlayer entity
+    botAgent3 = new BotAgent(8, true); //pass it the entity_id for the corresponding GamePlayer entity
+    botAgent4 = new BotAgent(9, true); //pass it the entity_id for the corresponding GamePlayer entity
+    botAgent5 = new BotAgent(10, true); //pass it the entity_id for the corresponding GamePlayer entity
+
+    // Friendly bots
+    botAgent6 = new BotAgent(11, false); //pass it the entity_id for the corresponding GamePlayer entity
+    botAgent7 = new BotAgent(12, false); //pass it the entity_id for the corresponding GamePlayer entity
+
+    
             
     // draw the initial board
     render_board();
@@ -217,7 +237,7 @@ class OreBullet extends Square {
         super(context, x, y, width, height, color);
         this.owner_id = owner_id; // which player owns this bullet
         this.type = 'ore_bullet';
-        let bullet_speed = 10;
+        let bullet_speed = BULLET_SPEED;
 
         this.max_v_x = 15;
         this.max_v_y = 15;
@@ -230,8 +250,8 @@ class OreBullet extends Square {
         // this.v_y = bullet_speed * Math.sin(bullet_angle* Math.PI / 180);
 
         let bullet_angle = Math.atan2(dest_y - this.y, dest_x - this.x);
-        this.v_x = bullet_speed * Math.cos(bullet_angle);
-        this.v_y = bullet_speed * Math.sin(bullet_angle);
+        this.v_x = BULLET_SPEED * Math.cos(bullet_angle);
+        this.v_y = BULLET_SPEED * Math.sin(bullet_angle);
     }
 
     update_position(timePassed) {
@@ -395,7 +415,7 @@ class GamePlayer extends Circle {
         // this.score_multiplier_decay_delay = 1000; // ms
         // this.score_multiplier_decay_delay_counter = 0;
 
-        this.bullet_count_max = 10;
+        this.bullet_count_max = 20;
     }
 
 }
@@ -549,14 +569,19 @@ class NewGamePlus {
         this.entities.push(new GamePlayer(context, 0, END_ZONE_WIDTH, canvas.height/2, '#DD0000'));
         this.entities.push(new GamePlayer(context, 1, canvas.width - END_ZONE_WIDTH, canvas.height/2, '#0000DD'));
         // this.entities.push(new Square(context, 0, 0, 20, 20, '#DD0000'));
-        this.entities.push(new Ore(context, canvas.width/2, 150, '#00BBBB', .1, 50));
-        this.entities.push(new Ore(context, canvas.width/2, 300, '#00BBBB', .1, 25));
+        this.entities.push(new Ore(context, canvas.width/2, 150, '#00BBBB', .1, 75));
+        this.entities.push(new Ore(context, canvas.width/2, 300, '#00BBBB', .1, 50));
         this.entities.push(new Ore(context, canvas.width/2, canvas.height/2, '#00BBBB', .1, END_ZONE_WIDTH));
-        this.entities.push(new Ore(context, canvas.width/2, canvas.height - 300, '#00BBBB', .1, 25));
-        this.entities.push(new Ore(context, canvas.width/2, canvas.height - 150, '#00BBBB', .1, 50));
+        this.entities.push(new Ore(context, canvas.width/2, canvas.height - 300, '#00BBBB', .1, 50));
+        this.entities.push(new Ore(context, canvas.width/2, canvas.height - 150, '#00BBBB', .1, 75));
         
-        // this.entities.push(new GamePlayer(context, 2, canvas.width - END_ZONE_WIDTH, canvas.height/3, '#0000DD'));
-        // this.entities.push(new GamePlayer(context, 3, canvas.width - END_ZONE_WIDTH, canvas.height*2/3, '#0000DD'));
+        this.entities.push(new GamePlayer(context, 2, canvas.width - END_ZONE_WIDTH, canvas.height/3, '#0000DD'));
+        this.entities.push(new GamePlayer(context, 3, canvas.width - END_ZONE_WIDTH, canvas.height*2/3, '#0000DD'));
+        this.entities.push(new GamePlayer(context, 4, canvas.width - END_ZONE_WIDTH, canvas.height/5, '#0000DD'));
+        this.entities.push(new GamePlayer(context, 5, canvas.width - END_ZONE_WIDTH, canvas.height*4/5, '#0000DD'));
+        
+        this.entities.push(new GamePlayer(context, 6, END_ZONE_WIDTH, canvas.height*1/3, '#DD0000'));
+        this.entities.push(new GamePlayer(context, 7, END_ZONE_WIDTH, canvas.height*2/3, '#DD0000'));
         
         // this.entities.push(new GamePlayer(context, 5, 1750, 600, '#0000DD'));
 
@@ -565,26 +590,93 @@ class NewGamePlus {
 }
 
 class BotAgent {
-    constructor() {
-        this.id = -1;
-        this.score = 0;
+    constructor(entity_id, is_on_right_side) {
+        this.entity_id = entity_id;
+        this.score = 0; //TODO - currently stored in the gameplayer entity
         this.set_smart_target();
+        this.is_on_right_side = is_on_right_side;
         
     }
+    make_a_move() {
+        let distance_x = game.entities[this.current_target].x - game.entities[this.entity_id].x;
+        let distance_y = game.entities[this.current_target].y - game.entities[this.entity_id].y;
+        let distance = Math.sqrt(distance_x**2 + distance_y**2);
+
+        if (Math.abs(distance) < game.entities[this.entity_id].radius + game.entities[this.current_target].radius + 5 | Math.random() > .95) {
+        // if (Math.abs(distance) < game.entities[this.entity_id].radius + game.entities[this.current_target].radius + 5 ) {
+            // this.set_target(Math.random()*CANVAS_WIDTH, Math.random()*CANVAS_HEIGHT);
+            // this.set_random_target();
+            this.set_smart_target();
+            distance_x = game.entities[this.current_target].x - game.entities[this.entity_id].x;
+            distance_y = game.entities[this.current_target].y - game.entities[this.entity_id].y;
+            distance = Math.sqrt(distance_x**2 + distance_y**2);
+
+        }
+
+        if (distance_x > 0) {
+            
+            game.entities[this.entity_id].acc_x += .25 //* Math.abs((distance_x/distance));
+            
+            if (this.is_on_right_side) {
+                game.entities[this.entity_id].acc_y += .1 //* Math.abs((distance_x/distance));
+            }
+
+        } else if (distance_x < 0) {
+            game.entities[this.entity_id].acc_x -= .25 //* Math.abs((distance_x/distance));
+
+            if (!this.is_on_right_side) {
+                game.entities[this.entity_id].acc_y -= .1 //* Math.abs((distance_x/distance));
+            }
+        }
+
+        if (distance_y > 0) {
+            game.entities[this.entity_id].acc_y += .1 //* Math.abs((distance_y/distance));
+        } else if (distance_y < 0) {
+            game.entities[this.entity_id].acc_y -= .1 //* Math.abs((distance_y/distance));
+        }
+    }
+
+    consider_shooting_at_target() {
+        //TODO
+        if (Math.random() > .99) {
+            console.log('shoot')
+            let distance_x = game.entities[this.current_target].x - game.entities[this.entity_id].x;
+            let distance_y = game.entities[this.current_target].y - game.entities[this.entity_id].y;
+            let bullet_angle = Math.atan2(distance_y, distance_x);
+            
+            // Set the lead distance using the target's velocity (and maybe later their acc)
+            // "Bullet flight time to target times speed of target will give you the lead distance.""
+            let lead_distance_x = distance_x/(BULLET_SPEED * Math.cos(bullet_angle))*game.entities[this.current_target].v_x;
+            let lead_distance_y = distance_y/(BULLET_SPEED * Math.sin(bullet_angle))*game.entities[this.current_target].v_y;
+            distance_x += lead_distance_x;
+            distance_y += lead_distance_y;
+
+            // distance_x += game.entities[this.current_target].radius; // aim to the right of the target
+
+            // if (game.entities[this.current_target].v_x > 0) {
+            //     lead_distance_x = game.entities[this.current_target].v_x * 10;
+
+            if((this.is_on_right_side & distance_x < 0) | (!this.is_on_right_side & distance_x > 0)){
+                game.entities.push(new OreBullet(game.canvas.getContext('2d'), this.entity_id, game.entities[this.entity_id].x, game.entities[this.entity_id].y, game.entities[this.current_target].x, game.entities[this.current_target].y, 10, 10, '#0000BB'));
+                game.entities[1].score -= 5; //TODO magic number
+            }
+        }
+    }
+
 
     // set_target(x, y) {
     //     this.current_target_x = x;
     //     this.current_target_y = y;
 
-    //     this.current_target_original_distance_x = game.entities[1].x - this.current_target_x;
-    //     this.current_target_original_distance_y = game.entities[1].y - this.current_target_y;
+    //     this.current_target_original_distance_x = game.entities[this.entity_id].x - this.current_target_x;
+    //     this.current_target_original_distance_y = game.entities[this.entity_id].y - this.current_target_y;
     //     console.log('Target set to ' + this.current_target_x + ', ' + this.current_target_y);
     // }
 
     set_target(entity_id) {
         this.current_target = entity_id;
-        this.current_target_original_distance_x = game.entities[1].x - game.entities[this.current_target].x;
-        this.current_target_original_distance_y = game.entities[1].y - game.entities[this.current_target].y;
+        this.current_target_original_distance_x = game.entities[this.entity_id].x - game.entities[this.current_target].x;
+        this.current_target_original_distance_y = game.entities[this.entity_id].y - game.entities[this.current_target].y;
         // console.log('Target set to ' + game.entities[this.current_target].x + ', ' + game.entities[this.current_target].y);
     }
 
@@ -601,54 +693,64 @@ class BotAgent {
         // TODO
         let target_option_ids = [2, 3, 4, 5, 6];
         let target_weights = [0, 0, 0, 0, 0];
-        target_weights[0] = 1/Math.sqrt((game.entities[2].x - game.entities[1].x)**2 + (game.entities[2].y - game.entities[1].y)**2)*(game.entities[2].ore**3)//; *(game.entities[1].x - game.entities[2].x);
-        target_weights[1] = 1/Math.sqrt((game.entities[3].x - game.entities[1].x)**2 + (game.entities[3].y - game.entities[1].y)**2)*(game.entities[3].ore**3)//; *(game.entities[1].x - game.entities[3].x);
-        target_weights[2] = 1/Math.sqrt((game.entities[4].x - game.entities[1].x)**2 + (game.entities[4].y - game.entities[1].y)**2)*(game.entities[4].ore**3)//; *(game.entities[1].x - game.entities[4].x);
-        target_weights[3] = 1/Math.sqrt((game.entities[5].x - game.entities[1].x)**2 + (game.entities[5].y - game.entities[1].y)**2)*(game.entities[5].ore**3)//; *(game.entities[1].x - game.entities[5].x);
-        target_weights[4] = 1/Math.sqrt((game.entities[6].x - game.entities[1].x)**2 + (game.entities[6].y - game.entities[1].y)**2)*(game.entities[6].ore**3)//; *(game.entities[1].x - game.entities[6].x);
+        target_weights[0] = 1/Math.sqrt((game.entities[2].x - game.entities[this.entity_id].x)**2 + (game.entities[2].y - game.entities[this.entity_id].y)**2)*(game.entities[2].ore**3)//; *(game.entities[this.entity_id].x - game.entities[2].x);
+        target_weights[1] = 1/Math.sqrt((game.entities[3].x - game.entities[this.entity_id].x)**2 + (game.entities[3].y - game.entities[this.entity_id].y)**2)*(game.entities[3].ore**3)//; *(game.entities[this.entity_id].x - game.entities[3].x);
+        target_weights[2] = 1/Math.sqrt((game.entities[4].x - game.entities[this.entity_id].x)**2 + (game.entities[4].y - game.entities[this.entity_id].y)**2)*(game.entities[4].ore**3)//; *(game.entities[this.entity_id].x - game.entities[4].x);
+        target_weights[3] = 1/Math.sqrt((game.entities[5].x - game.entities[this.entity_id].x)**2 + (game.entities[5].y - game.entities[this.entity_id].y)**2)*(game.entities[5].ore**3)//; *(game.entities[this.entity_id].x - game.entities[5].x);
+        target_weights[4] = 1/Math.sqrt((game.entities[6].x - game.entities[this.entity_id].x)**2 + (game.entities[6].y - game.entities[this.entity_id].y)**2)*(game.entities[6].ore**3)//; *(game.entities[this.entity_id].x - game.entities[6].x);
         
-        // if(game.entities[2].x > game.entities[1].x) {
-        //     target_weights[0] /= (game.entities[2].x - game.entities[1].x);
+        // if(game.entities[2].x > game.entities[this.entity_id].x) {
+        //     target_weights[0] /= (game.entities[2].x - game.entities[this.entity_id].x);
         // }
-        // if(game.entities[3].x > game.entities[1].x) {
-        //     target_weights[1] /= (game.entities[2].x - game.entities[1].x);
+        // if(game.entities[3].x > game.entities[this.entity_id].x) {
+        //     target_weights[1] /= (game.entities[2].x - game.entities[this.entity_id].x);
         // }
-        // if(game.entities[4].x > game.entities[1].x) {
-        //     target_weights[2] /= (game.entities[2].x - game.entities[1].x);
+        // if(game.entities[4].x > game.entities[this.entity_id].x) {
+        //     target_weights[2] /= (game.entities[2].x - game.entities[this.entity_id].x);
         // }
-        // if(game.entities[5].x > game.entities[1].x) {
-        //     target_weights[3] /= (game.entities[2].x - game.entities[1].x);
+        // if(game.entities[5].x > game.entities[this.entity_id].x) {
+        //     target_weights[3] /= (game.entities[2].x - game.entities[this.entity_id].x);
         // }
-        // if(game.entities[6].x > game.entities[1].x) {
-        //     target_weights[4] /= (game.entities[2].x - game.entities[1].x);
+        // if(game.entities[6].x > game.entities[this.entity_id].x) {
+        //     target_weights[4] /= (game.entities[2].x - game.entities[this.entity_id].x);
         // }
 
-        // if(game.entities[2].x < canvas.width/2) {
+        if(this.is_on_right_side) {
             target_weights[0] *= game.entities[2].x**4;
-        // }
-        // if(game.entities[3].x < canvas.width/2) {
+        } else {
+            target_weights[0] *= 1/game.entities[2].x**4;
+        }
+        if(this.is_on_right_side) {
             target_weights[1] *= game.entities[3].x**4;
-        // }
-        // if(game.entities[4].x < canvas.width/2) {
+        } else {
+            target_weights[1] *= 1/game.entities[3].x**4;
+        }
+        if(this.is_on_right_side) {
             target_weights[2] *= game.entities[4].x**4;
-        // }
-        // if(game.entities[5].x < canvas.width/2) {
+        } else {
+            target_weights[2] *= 1/game.entities[4].x**4;
+        }
+        if(this.is_on_right_side) {
             target_weights[3] *= game.entities[5].x**4;
-        // }
-        // if(game.entities[6].x < canvas.width/2) {
+        } else {
+            target_weights[3] *= 1/game.entities[5].x**4;
+        }
+        if(this.is_on_right_side) {
             target_weights[4] *= game.entities[6].x**4;
-        // }
+        } else {
+            target_weights[4] *= 1/game.entities[6].x**4;
+        }
         
         
 
         // console.log(target_weights);
         
-        // distance_x = game.entities[botAgent.current_target].x - game.entities[1].x;
-        // distance_y = game.entities[botAgent.current_target].y - game.entities[1].y;
+        // distance_x = game.entities[botAgent.current_target].x - game.entities[this.entity_id].x;
+        // distance_y = game.entities[botAgent.current_target].y - game.entities[this.entity_id].y;
         // distance = Math.sqrt(distance_x**2 + distance_y**2);
         this.set_target(target_option_ids[target_weights.indexOf(Math.max(...target_weights))]);
 
-        // distance_x = game.entities[botAgent.current_target].x - game.entities[1].x;
+        // distance_x = game.entities[botAgent.current_target].x - game.entities[this.entity_id].x;
 
 
     }
@@ -718,16 +820,16 @@ function process_user_input() {
     game.entities[0].acc_y = 0;
     
     if (pressedKeys[87] | pressedKeys[38]) { // W | Up
-        game.entities[0].acc_y = -.075;
+        game.entities[0].acc_y = -.2;
     }
     if (pressedKeys[65] | pressedKeys[37]) { // A | Left
-        game.entities[0].acc_x = -.075;
+        game.entities[0].acc_x = -.2;
     }
     if (pressedKeys[83] | pressedKeys[40]) { // S | Down
-        game.entities[0].acc_y = .075;
+        game.entities[0].acc_y = .2;
     }
     if (pressedKeys[68] | pressedKeys[39]) { // D | Right
-        game.entities[0].acc_x = .075;
+        game.entities[0].acc_x = .2;
     }
 
 }
@@ -750,38 +852,18 @@ function process_bot_input() {
     // console.log(tf.getBackend());
 
     // Simulate keyboard input
+    // botAgent.make_a_move();
+    // botAgent2.make_a_move();
+    // botAgent3.make_a_move();
+    // botAgent4.make_a_move();
+    // botAgent5.make_a_move();
+    // botAgent6.make_a_move();
+    // botAgent7.make_a_move();
+
     //Aim for the current target
-    let distance_x = game.entities[botAgent.current_target].x - game.entities[1].x;
-    let distance_y = game.entities[botAgent.current_target].y - game.entities[1].y;
-    let distance = Math.sqrt(distance_x**2 + distance_y**2);
-
-    if (Math.abs(distance) < game.entities[1].radius + game.entities[botAgent.current_target].radius + 5 | Math.random() > .95) {
-    // if (Math.abs(distance) < game.entities[1].radius + game.entities[botAgent.current_target].radius + 5 ) {
-        // botAgent.set_target(Math.random()*CANVAS_WIDTH, Math.random()*CANVAS_HEIGHT);
-        // botAgent.set_random_target();
-        botAgent.set_smart_target();
-        distance_x = game.entities[botAgent.current_target].x - game.entities[1].x;
-        distance_y = game.entities[botAgent.current_target].y - game.entities[1].y;
-        distance = Math.sqrt(distance_x**2 + distance_y**2);
-
-    }
-
-    if (distance_x > 0) {
-        
-        game.entities[1].acc_x += .25 //* Math.abs((distance_x/distance));
-        game.entities[1].acc_y += .1 //* Math.abs((distance_x/distance));
-
-    } else if (distance_x < 0) {
-        game.entities[1].acc_x -= .25 //* Math.abs((distance_x/distance));
-
-    }
-
-    if (distance_y > 0) {
-        game.entities[1].acc_y += .1 //* Math.abs((distance_y/distance));
-    } else if (distance_y < 0) {
-        game.entities[1].acc_y -= .1 //* Math.abs((distance_y/distance));
-    }
-
+    botAgent.consider_shooting_at_target();
+    
+    
 }
 
 function clean_up_objects() {
