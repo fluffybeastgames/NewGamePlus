@@ -11,10 +11,12 @@ let canvas;
 // let botAgent6;
 // let botAgent7;
 
+let points_to_win = 500; // default, can be overriden in the new game constructor
+
 
 let END_ZONE_WIDTH = 100;
-let CANVAS_WIDTH = 1800;
-let CANVAS_HEIGHT = 900;
+let CANVAS_WIDTH = 2000;
+let CANVAS_HEIGHT = 1000;
 let PLAYER_DIAMETER = 50;
 
 const BULLET_SPEED = 10;
@@ -69,6 +71,7 @@ function loadApp() {
     });
 
     gameDiv.appendChild(canvas);
+    gameDiv.appendChild(get_instructions_div())
     
     //Add score readout
     //Add score for each player
@@ -155,6 +158,45 @@ function loadApp() {
 
 }
 
+function get_instructions_div() {
+    let div = document.createElement('div');
+    div.id = 'instructions';
+    div.style.position = 'absolute';
+    div.style.top = (canvas.height + 100) + 'px';
+    div.style.left = '50px';
+    div.style.width = canvas.width;
+    div.style.height = '150px';
+    div.style.zIndex = '1';
+    div.style.fontSize = '16px';
+    div.style.fontFamily = 'Arial';
+    div.style.textAlign = 'left';
+    div.style.color = '#000000';
+    
+    let h2 = document.createElement('h2');
+    h2.innerHTML = 'How To Play';
+    div.appendChild(h2);
+
+    let p1 = document.createElement('p');
+    p1.innerHTML = 'Use the arrow keys or WAS to move the player around the screen. Score points by pushing the green ore into the end zone matching your color.';
+    div.appendChild(p1);
+
+    let p2 = document.createElement('p');
+    p2.innerHTML = 'Shoot ore bullets with the mouse, but beware they cost 5 points each. You also lose points for lingering on the enemy\'s side.';
+    div.appendChild(p2);
+
+    let p3 = document.createElement('p');
+    p3.innerHTML = 'First to ' + points_to_win + ' points wins!';
+    div.appendChild(p3);
+
+    return div;
+    
+    // <!-- <div id = "instructions">
+    // <h2>How To Play</h2>
+    // <p>Use the arrow keys or WAS to move the player around the screen. Score points by pushing the green ore into the end zone matching your color.</p>
+    // <p>Shoot ore bullets with the mouse, but beware they cost 5 points each. You also lose points for lingering on the enemy's side.</p>
+    // <p>First to 1000 points wins!</p>
+// </div>
+}
 class GameEntity {
     constructor(context, type, shape, x, y, color) {
         this.context = context;
@@ -426,7 +468,7 @@ class GamePlayer extends Circle {
         this.max_v_x = 5;
         this.max_v_y = 5;
 
-        this.score = 50;
+        // this.score = 50;
         // this.score_multiplier = 1;
         // this.score_multiplier_max = 5;
         // this.score_multiplier_growth_rate = .05;
@@ -448,21 +490,31 @@ class GamePlayer extends Circle {
 
 class GameObstacle {
     // An immovable object that can be collided with
-    constructor(context, type, shape, x, y, color) {
+    constructor(context, type, shape, color) {
         this.context = context;
         this.type = type;
         this.shape = shape;
-        this.x = x;
-        this.y = y;
+        // this.x = x;
+        // this.y = y;
         this.color = color;
     }    
 }
 
-class Triangle extends GameObstacle {
-    constructor(context, x, y, width, height, color) {
-        super(context, 'triangle', 'triangle', x, y, color);
+class Bumper extends GameObstacle {
+    constructor(context, pt1, pt2, pt3, color) {
+        super(context, 'bumper', 'triangle', color);
+        this.pt1 = pt1;
+        this.pt2 = pt2;
+        this.pt3 = pt3;
+    }
 
-
+    draw() {
+        this.context.fillStyle = this.color;
+        this.context.beginPath();
+        this.context.moveTo(this.pt1[0], this.pt1[1]);
+        this.context.lineTo(this.pt2[0], this.pt2[1]);
+        this.context.lineTo(this.pt3[0], this.pt3[1]);
+        this.context.fill();
     }
 }
 
@@ -615,7 +667,16 @@ class NewGamePlus {
         this.score_team_1 = 50;
         this.score_team_2 = 50;
 
-        this.num_bots = 1;
+        this.num_bots = 7;
+        this.num_ore = 5;
+        
+        // points_to_win = 100;
+
+        this.obstacles = {};
+        this.obstacles['bumper1'] = new Bumper(context, [0,0], [0,END_ZONE_WIDTH], [END_ZONE_WIDTH, 0], '#888888');
+        this.obstacles['bumper2'] = new Bumper(context, [0,canvas.height], [0,canvas.height - END_ZONE_WIDTH], [END_ZONE_WIDTH, canvas.height], '#888888');
+        this.obstacles['bumper3'] = new Bumper(context, [canvas.width,0], [canvas.width,END_ZONE_WIDTH], [canvas.width - END_ZONE_WIDTH, 0], '#888888');
+        this.obstacles['bumper4'] = new Bumper(context, [canvas.width,canvas.height], [canvas.width,canvas.height - END_ZONE_WIDTH], [canvas.width - END_ZONE_WIDTH, canvas.height], '#888888');
 
         this.entities = {};
         this.entities['player'] = new GamePlayer(context, 'Zeke', END_ZONE_WIDTH, canvas.height/2, '#FF6666');
@@ -669,23 +730,29 @@ class DumbBot extends GamePlayer {
         super(context, id, x, y, color);
         // this.team = 
         this.is_on_right_side = is_on_right_side;
-        this.current_target = 'player';
-
-        // this.set_smart_target();
+        this.homing_target = 'ore1';
+        this.shot_target = 'ore3';
+        // this.set_homing_target();
         
     }
     make_a_move() {
-        let distance_x = game.entities[this.current_target].x - this.x;
-        let distance_y = game.entities[this.current_target].y - this.y;
+        let distance_x = game.entities[this.homing_target].x - this.x;
+        let distance_y = game.entities[this.homing_target].y - this.y;
         let distance = Math.sqrt(distance_x**2 + distance_y**2);
 
-        if (Math.abs(distance) < this.radius + game.entities[this.current_target].radius + 5 | Math.random() > .95) {
-        // if (Math.abs(distance) < this.radius + game.entities[this.current_target].radius + 5 ) {
+        if (Math.abs(distance) < this.radius + game.entities[this.homing_target].radius + 5 | Math.random() > .95) {
+        // if (Math.abs(distance) < this.radius + game.entities[this.homing_target].radius + 5 ) {
             // this.set_target(Math.random()*CANVAS_WIDTH, Math.random()*CANVAS_HEIGHT);
             // this.set_random_target();
-            this.set_smart_target();
-            distance_x = game.entities[this.current_target].x - this.x;
-            distance_y = game.entities[this.current_target].y - this.y;
+            this.set_homing_target();
+            distance_x = game.entities[this.homing_target].x - this.x;
+            distance_y = game.entities[this.homing_target].y - this.y;
+            
+            if (this.is_on_right_side) { 
+                distance_x += game.entities[this.homing_target].radius; // aim to the right of the target
+            } else {
+                distance_x -= game.entities[this.homing_target].radius; // aim to the left of the target
+            }
             distance = Math.sqrt(distance_x**2 + distance_y**2);
 
         }
@@ -715,64 +782,88 @@ class DumbBot extends GamePlayer {
 
     consider_shooting_at_target() {
         //TODO improve this
-        if (Math.random() > .999) {
+
+        if (Math.random() > .997) {
+            this.set_shot_target();
             // console.log('shoot')
-            let distance_x = game.entities[this.current_target].x - this.x;
-            let distance_y = game.entities[this.current_target].y - this.y;
+            let distance_x = game.entities[this.shot_target].x - this.x;
+            let distance_y = game.entities[this.shot_target].y - this.y;
             let bullet_angle = Math.atan2(distance_y, distance_x);
             
             // Set the lead distance using the target's velocity (and maybe later their acc)
             // "Bullet flight time to target times speed of target will give you the lead distance.""
-            let lead_distance_x = distance_x/(BULLET_SPEED * Math.cos(bullet_angle))*game.entities[this.current_target].v_x;
-            let lead_distance_y = distance_y/(BULLET_SPEED * Math.sin(bullet_angle))*game.entities[this.current_target].v_y;
-            distance_x += lead_distance_x;
-            distance_y += lead_distance_y;
+            let lead_distance_x = distance_x/(BULLET_SPEED * Math.cos(bullet_angle))*game.entities[this.shot_target].v_x;
+            let lead_distance_y = distance_y/(BULLET_SPEED * Math.sin(bullet_angle))*game.entities[this.shot_target].v_y;
+            
+            let dest_x = game.entities[this.shot_target].x + lead_distance_x;
+            let dest_y = game.entities[this.shot_target].y + lead_distance_y;
 
-            // distance_x += game.entities[this.current_target].radius; // aim to the right of the target
+            if (this.is_on_right_side) {
+                dest_x += game.entities[this.shot_target].radius; // aim to the right of the target
+            } else {
+                dest_x -= game.entities[this.shot_target].radius; // aim to the left of the target
+            }
+            // bullet_angle = Math.atan2(distance_y, distance_x); // adjust with lead distance
+            
+            // distance_x += game.entities[this.shot_target].radius; // aim to the right of the target
 
-            // if (game.entities[this.current_target].v_x > 0) {
-            //     lead_distance_x = game.entities[this.current_target].v_x * 10;
+            // if (game.entities[this.shot_target].v_x > 0) {
+            //     lead_distance_x = game.entities[this.shot_target].v_x * 10;
             
 
-            if((this.is_on_right_side & game.score_team_2 >= 5 & distance_x < -1*game.entities[this.current_target].radius) | (!this.is_on_right_side & game.score_team_1 >= 5 & distance_x > game.entities[this.current_target].radius)){
+            if((this.is_on_right_side & game.score_team_2 >= 5 & distance_x < -1*game.entities[this.shot_target].radius) | (!this.is_on_right_side & game.score_team_1 >= 5 & distance_x > game.entities[this.shot_target].radius)){
                 bullet_id_counter += 1;
-                game.entities[bullet_id_counter] = new OreBullet(game.canvas.getContext('2d'), this.entity_id, this.x, this.y, game.entities[this.current_target].x, game.entities[this.current_target].y, 10, 10, this.color);
+                game.entities[bullet_id_counter] = new OreBullet(game.canvas.getContext('2d'), this.entity_id, this.x, this.y, dest_x, dest_y, 10, 10, this.color);
                 
                 if(this.is_on_right_side) {
                     game.score_team_2 -= 5; //TODO magic number
                 } else {
                     game.score_team_1 -= 5; //TODO magic number
                 };
+
+                console.log('shot fired ' + bullet_id_counter + ' at ' + Math.round(dest_x) + ', ' + Math.round(dest_y));
+                console.log('target is ' + this.shot_target + ' at ' + Math.round(game.entities[this.shot_target].x) + ', ' + Math.round(game.entities[this.shot_target].y));
             }
         }
     }
 
     set_target(entity_id) {
-        this.current_target = entity_id;
-        this.current_target_original_distance_x = this.x - game.entities[this.current_target].x;
-        this.current_target_original_distance_y = this.y - game.entities[this.current_target].y;
-        // console.log('Target set to ' + game.entities[this.current_target].x + ', ' + game.entities[this.current_target].y);
+        this.homing_target = entity_id;
+        // this.homing_target_original_distance_x = this.x - game.entities[this.homing_target].x;
+        // this.homing_target_original_distance_y = this.y - game.entities[this.homing_target].y;
+        // console.log('Target set to ' + game.entities[this.homing_target].x + ', ' + game.entities[this.homing_target].y);
     }
 
-    set_random_target() {
-        //pick a target that is within the bounds of the canvas
-        let target = Math.floor(Math.random()*5)+2;
-        // this.set_target(game.entities[target].x, game.entities[target].y);
-        this.set_target(target);
+    // set_random_target() {
+    //     //pick a target that is within the bounds of the canvas
+    //     let target = Math.floor(Math.random()*5)+2;
+    //     // this.set_target(game.entities[target].x, game.entities[target].y);
+    //     this.set_target(target);
         
-    }
+    // }
+    set_shot_target() {
+        //who to aim for
+        //TODO
+        let target_weights = [0, 0, 0, 0, 0];
+        let target_option_ids = ['ore1', 'ore2', 'ore3', 'ore4', 'ore5'];
+        for (let i = 0; i < target_weights.length; i++) {
+            let dist = 1 / (Math.sqrt((game.entities['ore' + (i + 1)].x - this.x)**2 + (game.entities['ore' + (i + 1)].y - this.y)**2)/canvas.width);
+            target_weights[i] = dist;
+        }
 
-    set_smart_target() {
+        this.shot_target = target_option_ids[target_weights.indexOf(Math.max(...target_weights))];
+    }
+    set_homing_target() {
         // consider the distance to each ore, the relative size of the ore, and whether or not the ore is to the left or right of the player
         // TODO
         let target_weights = [0, 0, 0, 0, 0];
         let target_option_ids = ['ore1', 'ore2', 'ore3', 'ore4', 'ore5'];
         
-        target_weights[0] = 1/Math.sqrt((game.entities['ore1'].x - this.x)**2 + (game.entities['ore1'].y - this.y)**2)*(game.entities['ore1'].ore**3)//; *(this.x - game.entities[2].x);
-        target_weights[1] = 1/Math.sqrt((game.entities['ore2'].x - this.x)**2 + (game.entities['ore2'].y - this.y)**2)*(game.entities['ore2'].ore**3)//; *(this.x - game.entities[3].x);
-        target_weights[2] = 1/Math.sqrt((game.entities['ore3'].x - this.x)**2 + (game.entities['ore3'].y - this.y)**2)*(game.entities['ore3'].ore**3)//; *(this.x - game.entities[4].x);
-        target_weights[3] = 1/Math.sqrt((game.entities['ore4'].x - this.x)**2 + (game.entities['ore4'].y - this.y)**2)*(game.entities['ore4'].ore**3)//; *(this.x - game.entities[5].x);
-        target_weights[4] = 1/Math.sqrt((game.entities['ore5'].x - this.x)**2 + (game.entities['ore5'].y - this.y)**2)*(game.entities['ore5'].ore**3)//; *(this.x - game.entities[6].x);
+        target_weights[0] = (1/Math.sqrt((game.entities['ore1'].x - this.x)**2 + (game.entities['ore1'].y - this.y)**2))*(game.entities['ore1'].ore**33)//; *(this.x - game.entities[2].x);
+        target_weights[1] = (1/Math.sqrt((game.entities['ore2'].x - this.x)**2 + (game.entities['ore2'].y - this.y)**2))*(game.entities['ore2'].ore**33)//; *(this.x - game.entities[3].x);
+        target_weights[2] = (1/Math.sqrt((game.entities['ore3'].x - this.x)**2 + (game.entities['ore3'].y - this.y)**2))*(game.entities['ore3'].ore**33)//; *(this.x - game.entities[4].x);
+        target_weights[3] = (1/Math.sqrt((game.entities['ore4'].x - this.x)**2 + (game.entities['ore4'].y - this.y)**2))*(game.entities['ore4'].ore**33)//; *(this.x - game.entities[5].x);
+        target_weights[4] = (1/Math.sqrt((game.entities['ore5'].x - this.x)**2 + (game.entities['ore5'].y - this.y)**2))*(game.entities['ore5'].ore**33)//; *(this.x - game.entities[6].x);
         
         if(this.is_on_right_side) {
             target_weights[0] *= game.entities['ore1'].x**4;
@@ -819,9 +910,45 @@ function endGame() {
     console.log('endGame() called');
 }
 
+function game_continues() { 
+    // Return true if the game is still going
+    // Return false if the game is over
+
+    // TODO
+    if (game.score_team_1 >= points_to_win | game.score_team_2 >= points_to_win) {
+        render_game_over();
+        return false;
+        
+    }
+
+    return true;
+
+}
+function render_game_over() {
+    // TODO
+    console.log('render_game_over() called');
+    let context = game.canvas.getContext('2d');
+    
+    // canvas.style.backgroundColor = 'black';
+    //Clear the center of the canvas
+    context.clearRect(game.canvas.width/2 - 200, canvas.height/2 - 100, 400, 200);
+    context.font = '48px serif';
+
+    if (game.score_team_1 > game.score_team_2) {
+        context.fillStyle = '#DD0000';
+        context.textAlign = 'center';
+        context.fillText('Team 1 Wins!', canvas.width/2, canvas.height/2);
+    } else {
+        context.fillStyle = '#0000DD';
+        context.fillText('Team 2 Wins!', canvas.width/2, canvas.height/2);
+    }
+
+    
+
+}
 
 function game_loop_client() {
-    if (true) {
+    if (game_continues()) {
         // get user input
         process_user_input();
         process_bot_input();
@@ -848,6 +975,7 @@ function game_loop_client() {
 
         game.last_update = Date.now();
     }
+    
     setTimeout( () => { window.requestAnimationFrame(() => game_loop_client()); }, RENDER_REFRESH_TIME) // therefore each game loop will last at least tick_time ms    
 }
 
@@ -945,17 +1073,32 @@ function positional_logic_update() {
 function position_penalty_logic() {
     // TODO - make this work with arbitrary numbers of players belonging to one of two teams
     // apply penalties for being offsides
+    let punishment_per_second = .00125;
+
     if (game.entities['player'].x > CANVAS_WIDTH/2) {
-        game.score_team_1 -= .0025*(Date.now() - game.last_update);
+        game.score_team_1 -= punishment_per_second*(Date.now() - game.last_update);
         if(game.score_team_1 < 0) {
             game.score_team_1 = 0;
         }
     }
-    if (game.entities['bot1'].x < CANVAS_WIDTH/2) {
-        game.score_team_2 -= .0025*(Date.now() - game.last_update);
-        if(game.score_team_2 < 0) {
-            game.score_team_2 = 0;
+
+    for (let i = 1; i <= game.num_bots; i++) {
+        if (game.entities['bot' + i].is_on_right_side) {
+            if (game.entities['bot' + i].x < CANVAS_WIDTH/2) {
+                game.score_team_2 -= punishment_per_second*(Date.now() - game.last_update);
+                if(game.score_team_2 < 0) {
+                    game.score_team_2 = 0;
+                }
+            }
+        } else {
+            if (game.entities['bot' + i].x > CANVAS_WIDTH/2) {
+                game.score_team_1 -= punishment_per_second*(Date.now() - game.last_update);
+                if(game.score_team_1 < 0) {
+                    game.score_team_1 = 0;
+                }
+            }
         }
+
     }
 
 }
@@ -969,7 +1112,11 @@ function check_if_collision(entity1, entity2) {
         return circle_rectangle_collision_check(entity1, entity2);
     } else if (entity1.shape == 'square' && entity2.shape == 'circle') {
         return circle_rectangle_collision_check(entity2, entity1);
+    } else if (entity1.shape == 'circle' && entity2.shape == 'triangle') {
+        return triangle_collision_check(entity1, entity2);
     } else {
+
+        // console.log('check!')
         return false;
     }
 }
@@ -1019,15 +1166,83 @@ function circle_rectangle_collision_check(circle, rectangle) {
     return (distance_corner <= (circle.radius**2));
 }
 
+function point_square_collision_check(square, point) {
+    //TODO
+    //Check if a point is inside of a square
+    let l1 = entity1.x;
+    let t1 = entity1.y;
+    let r1 = entity1.x + entity1.width;
+    let b1 = entity1.y + entity1.height;
+
+    let l2 = entity2.x;
+    let t2 = entity2.y;
+    let r2 = entity2.x + entity2.width;
+    let b2 = entity2.y + entity2.height;
+
+    if (b1 < t2 || t1 > b2 || r1 < l2 || l1 > r2) {
+        return false;
+    } else {
+        return true;
+    }
+
+    return false;
+}
+function triangle_collision_check(entity, triangle) {
+    return false //TODO
+
+    if (entity.x < triangle.pt1[0] && entity.x < triangle.pt2[0] && entity.x < triangle.pt3[0]) {
+        return false;
+    } else if (entity.x > triangle.pt1[0] && entity.x > triangle.pt2[0] && entity.x > triangle.pt3[0]) {
+        return false;
+    } else if (entity.y < triangle.pt1[1] && entity.y < triangle.pt2[1] && entity.y < triangle.pt3[1]) {
+        return false;
+    } else if (entity.y > triangle.pt1[1] && entity.y > triangle.pt2[1] && entity.y > triangle.pt3[1]) {
+        return false;
+
+    } else {
+        return true;
+    }
+
+    return false;
+
+    // triangle.p1[0]
+
+
+    // //TODO
+    // //Check if a triangle and a circle or square are colliding
+    // if(entity.type == 'circle') {
+
+    // } else if (entity.type == 'square') {
+    //     // Check each vertex of the triangle to see if it is inside the square
+    //     point_square_collision_check()
+
+    // }
+
+
+    // console.log('triangle hit?')
+    // return false;
+}
+
+
 function collision_detection_update() {
     let collisions = [];
     
     let array_of_entities = Object.values(game.entities);
-  
+    let array_of_obstacles = Object.values(game.obstacles);
+        
     for (let i = 0; i < array_of_entities.length; i++) {
+        //Check for collisions between each entity and every other entity
         for (let j = i + 1; j < array_of_entities.length; j++) {
             if (check_if_collision(array_of_entities[i], array_of_entities[j])) {
                 collisions.push([array_of_entities[i], array_of_entities[j]]);
+                // console.log('collision detected')
+            }
+        }
+
+        //Check for collisions between each entity and every obstacle
+        for (let k = 0; k < array_of_obstacles.length; k++) {
+            if (check_if_collision(array_of_entities[i], array_of_obstacles[k])) {
+                collisions.push([array_of_entities[i], array_of_obstacles[k]]);
                 // console.log('collision detected')
             }
         }
@@ -1037,7 +1252,6 @@ function collision_detection_update() {
 }
 
 function resolve_collisions(collisions) {   
-    // TODO - make this work with both circles and squares
     for (let i = 0; i < collisions.length; i++) {
 
         // console.log('Resolving collision between ' + collisions[i][0].type + ' and ' + collisions[i][1].type);
@@ -1116,11 +1330,17 @@ function render_board() {
     context.lineTo(canvas.width/2, canvas.height);
     context.stroke();
     
+    // Draw all obstacles on the canvas
+    for (let key in game.obstacles) {
+        game.obstacles[key].draw();
+    }
 
     // Draw each entity on the canvas
     for (let key in game.entities) {
         game.entities[key].draw();
     }
+
+    
 
 }
 
