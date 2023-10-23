@@ -15,6 +15,7 @@ let canvas;
 let END_ZONE_WIDTH = 100;
 let CANVAS_WIDTH = 1800;
 let CANVAS_HEIGHT = 900;
+let PLAYER_DIAMETER = 50;
 
 const BULLET_SPEED = 10;
 let bullet_id_counter = 0;
@@ -50,10 +51,10 @@ function loadApp() {
                 }
             }
 
-            if (num_player_bullets < game.entities['player'].bullet_count_max & game.entities['player'].score >= 5) {
+            if (num_player_bullets < game.entities['player'].bullet_count_max & game.score_team_1 >= 5) {
                 bullet_id_counter += 1;
-                game.entities['bullet' + bullet_id_counter] = new OreBullet(canvas.getContext('2d'), 'player', game.entities['player'].x, game.entities['player'].y, mousePos['x'], mousePos['y'], 10, 10, '#BB0000');
-                game.entities['player'].score -= 5;
+                game.entities['bullet' + bullet_id_counter] = new OreBullet(canvas.getContext('2d'), 'player', game.entities['player'].x, game.entities['player'].y, mousePos['x'], mousePos['y'], 10, 10, '#FF6666');
+                game.score_team_1 -= 5;
             };
         };
 
@@ -80,7 +81,7 @@ function loadApp() {
     scoreDivLeft.style.width = canvas.width/2;
     scoreDivLeft.style.height = '150px';
     scoreDivLeft.style.zIndex = '1';
-    scoreDivLeft.style.fontSize = '32px';
+    scoreDivLeft.style.fontSize = '48px';
     scoreDivLeft.style.fontFamily = 'Arial';
     scoreDivLeft.style.textAlign = 'center';
     scoreDivLeft.style.color = '#DD0000';
@@ -97,7 +98,7 @@ function loadApp() {
     scoreDivRight.style.width = canvas.width/2;
     scoreDivRight.style.height = '150px';
     scoreDivRight.style.zIndex = '1';
-    scoreDivRight.style.fontSize = '32px';
+    scoreDivRight.style.fontSize = '48px';
     scoreDivRight.style.fontFamily = 'Arial';
     scoreDivRight.style.textAlign = 'center';
     scoreDivRight.style.color = '#0000DD';
@@ -106,6 +107,24 @@ function loadApp() {
     gameDiv.appendChild(scoreDivRight);
 
     //Add debug readout
+    let debugDiv = document.createElement('div');
+    debugDiv.id = 'debugDiv';
+    debugDiv.style.position = 'absolute';
+    debugDiv.style.top = (canvas.height + 250) + 'px';
+    debugDiv.style.left = '50px';
+    debugDiv.style.width = canvas.width/2;
+    debugDiv.style.height = '50px';
+    debugDiv.style.zIndex = '1';
+    debugDiv.style.fontSize = '16px';
+    debugDiv.style.fontFamily = 'Arial';
+    debugDiv.style.textAlign = 'left';
+    debugDiv.style.color = '#000000';
+    debugDiv.style.verticalAlign = 'middle';
+    debugDiv.innerHTML = '';
+    gameDiv.appendChild(debugDiv);
+
+
+
 
     window.onkeyup = function(e) { 
         // e.preventDefault();
@@ -135,7 +154,6 @@ function loadApp() {
     render_board();
 
 }
-
 
 class GameEntity {
     constructor(context, type, shape, x, y, color) {
@@ -399,10 +417,10 @@ class Circle extends GameEntity {
 }
 
 class GamePlayer extends Circle {
-    constructor(context, id, x, y, color) {
-        let diameter = 33;
+    constructor(context, player_name, x, y, color) {
+        let diameter = PLAYER_DIAMETER;
         super(context, x, y, diameter, color);
-        this.player_id = id; // a unique integer id for each player
+        this.player_name = player_name; 
         this.max_acc_x = 1;
         this.max_acc_y = 1;
         this.max_v_x = 5;
@@ -419,8 +437,34 @@ class GamePlayer extends Circle {
         this.bullet_count_max = 20;
     }
 
+    draw() {
+        super.draw();
+        this.context.font = '24px serif';
+        this.context.fillStyle = 'black';
+        this.context.textAlign = 'center';
+        this.context.fillText(this.player_name, this.x, this.y - this.radius - 7);
+    }
 }
 
+class GameObstacle {
+    // An immovable object that can be collided with
+    constructor(context, type, shape, x, y, color) {
+        this.context = context;
+        this.type = type;
+        this.shape = shape;
+        this.x = x;
+        this.y = y;
+        this.color = color;
+    }    
+}
+
+class Triangle extends GameObstacle {
+    constructor(context, x, y, width, height, color) {
+        super(context, 'triangle', 'triangle', x, y, color);
+
+
+    }
+}
 
 class Ore extends GameEntity {
     constructor(context, x, y, color, ore_points_initial, ore_points_max) {
@@ -444,7 +488,9 @@ class Ore extends GameEntity {
         // this.x += this.vx * timePassed;
         // this.y += this.vy * timePassed;
 
-        if (this.x == this.spawn_x && this.y == this.spawn_y) {
+        // If the ore is in the middle, it grows
+        if (Math.abs(this.x - game.canvas.width/2) < Math.max(this.diameter, 1)) {
+        // if (this.x == this.spawn_x && this.y == this.spawn_y) {
             this.ore += this.ore_growth_rate * timePassed;
 
             if (this.ore > this.ore_points_max) {
@@ -491,7 +537,7 @@ class Ore extends GameEntity {
         this.context.strokeStyle = '#003300';
         this.context.stroke();
 
-        this.context.font = '14px';
+        this.context.font = '14px serif';
         this.context.fillStyle = 'black';
         this.context.textAlign = 'center';
         this.context.fillText(Math.round(this.ore), this.x, this.y);
@@ -529,14 +575,14 @@ class Ore extends GameEntity {
             let ore_to_transfer = Math.min(this.ore, this.ore_score_rate);
             this.ore -= ore_to_transfer;
             
-            game.entities['bot1'].score += ore_to_transfer;
+            game.score_team_2 += ore_to_transfer;
 
         }
         if (this.x >= CANVAS_WIDTH - END_ZONE_WIDTH) { //TODO magic number
             let ore_to_transfer = Math.min(this.ore, this.ore_score_rate);
             this.ore -= ore_to_transfer;
             
-            game.entities['player'].score += ore_to_transfer;
+            game.score_team_1 += ore_to_transfer;
 
         }
 
@@ -563,13 +609,16 @@ class NewGamePlus {
         this.id = -1;
         this.canvas = canvas;
         let context = canvas.getContext('2d');
-
+                
         this.last_update = Date.now();
-        
-        this.num_bots = 7;
+
+        this.score_team_1 = 50;
+        this.score_team_2 = 50;
+
+        this.num_bots = 1;
 
         this.entities = {};
-        this.entities['player'] = new GamePlayer(context, 0, END_ZONE_WIDTH, canvas.height/2, '#DD0000');
+        this.entities['player'] = new GamePlayer(context, 'Zeke', END_ZONE_WIDTH, canvas.height/2, '#FF6666');
         // this.entities[] = new Square(context, 0, 0, 20, 20, '#DD0000');
         
         this.entities['ore1'] = new Ore(context, canvas.width/2, 150, '#00BBBB', .1, 75);
@@ -578,14 +627,36 @@ class NewGamePlus {
         this.entities['ore4'] = new Ore(context, canvas.width/2, canvas.height - 300, '#00BBBB', .1, 50);
         this.entities['ore5'] = new Ore(context, canvas.width/2, canvas.height - 150, '#00BBBB', .1, 75);
         
-        this.entities['bot1'] = new DumbBot(context, 1, canvas.width - END_ZONE_WIDTH, canvas.height/2, '#0000DD', true);
-        this.entities['bot2'] = new DumbBot(context, 2, canvas.width - END_ZONE_WIDTH, canvas.height/3, '#0000DD', true);
-        this.entities['bot3'] = new DumbBot(context, 3, canvas.width - END_ZONE_WIDTH, canvas.height*2/3, '#0000DD', true);
-        this.entities['bot4'] = new DumbBot(context, 4, canvas.width - END_ZONE_WIDTH, canvas.height/5, '#0000DD', true);
-        this.entities['bot5'] = new DumbBot(context, 5, canvas.width - END_ZONE_WIDTH, canvas.height*4/5, '#0000DD', true);
+        for (let i = 1; i <= this.num_bots; i++) {
+            let starting_x;
+            let starting_y;
+            let color;
+            let on_the_right;
+
+            if (i % 2 != 0) {
+                starting_x = canvas.width - END_ZONE_WIDTH + PLAYER_DIAMETER;
+                starting_y = Math.random()*canvas.height;
+                color = '#0000DD';
+                on_the_right = true;
+
+            } else {
+                starting_x = END_ZONE_WIDTH;
+                starting_y = Math.random()*canvas.height;
+                color = '#DD0000';
+                on_the_right = false;
+            }
+            this.entities['bot' + i] = new DumbBot(context, 'Bot ' + i, starting_x, starting_y, color, on_the_right);
+        }
+        // this.entities['bot1'] = new DumbBot(context, 1, canvas.width - END_ZONE_WIDTH, canvas.height/2, '#0000DD', true);
+        // this.entities['bot2'] = new DumbBot(context, 2, canvas.width - END_ZONE_WIDTH, canvas.height/3, '#0000DD', true);
+        // this.entities['bot3'] = new DumbBot(context, 3, canvas.width - END_ZONE_WIDTH, canvas.height*2/3, '#0000DD', true);
+        // this.entities['bot4'] = new DumbBot(context, 4, canvas.width - END_ZONE_WIDTH, canvas.height/5, '#0000DD', true);
+        // this.entities['bot5'] = new DumbBot(context, 5, canvas.width - END_ZONE_WIDTH, canvas.height*4/5, '#0000DD', true);
         
-        this.entities['bot6'] = new DumbBot(context, 6, END_ZONE_WIDTH, canvas.height*1/3, '#DD0000', false);
-        this.entities['bot7'] = new DumbBot(context, 7, END_ZONE_WIDTH, canvas.height*2/3, '#DD0000', false);
+        // this.entities['bot6'] = new DumbBot(context, 6, END_ZONE_WIDTH, canvas.height*1/3, '#DD0000', false);
+        // this.entities['bot7'] = new DumbBot(context, 7, END_ZONE_WIDTH, canvas.height*2/3, '#DD0000', false);
+        // this.entities['bot8'] = new DumbBot(context, 8, END_ZONE_WIDTH, canvas.height/5, '#DD0000', false);
+        // this.entities['bot9'] = new DumbBot(context, 9, END_ZONE_WIDTH, canvas.height*4/5, '#DD0000', false);
         
         // this.entities[] = new GamePlayer(context, 5, 1750, 600, '#0000DD');
 
@@ -596,7 +667,7 @@ class NewGamePlus {
 class DumbBot extends GamePlayer {
     constructor(context, id, x, y, color, is_on_right_side) {
         super(context, id, x, y, color);
-
+        // this.team = 
         this.is_on_right_side = is_on_right_side;
         this.current_target = 'player';
 
@@ -645,7 +716,7 @@ class DumbBot extends GamePlayer {
     consider_shooting_at_target() {
         //TODO improve this
         if (Math.random() > .999) {
-            console.log('shoot')
+            // console.log('shoot')
             let distance_x = game.entities[this.current_target].x - this.x;
             let distance_y = game.entities[this.current_target].y - this.y;
             let bullet_angle = Math.atan2(distance_y, distance_x);
@@ -661,11 +732,17 @@ class DumbBot extends GamePlayer {
 
             // if (game.entities[this.current_target].v_x > 0) {
             //     lead_distance_x = game.entities[this.current_target].v_x * 10;
+            
 
-            if(game.entities['bot1'].score >= 5 & ((this.is_on_right_side & distance_x < -1*game.entities[this.current_target].radius) | (!this.is_on_right_side & distance_x > game.entities[this.current_target].radius))){
+            if((this.is_on_right_side & game.score_team_2 >= 5 & distance_x < -1*game.entities[this.current_target].radius) | (!this.is_on_right_side & game.score_team_1 >= 5 & distance_x > game.entities[this.current_target].radius)){
                 bullet_id_counter += 1;
-                game.entities[bullet_id_counter] = new OreBullet(game.canvas.getContext('2d'), this.entity_id, this.x, this.y, game.entities[this.current_target].x, game.entities[this.current_target].y, 10, 10, '#0000BB');
-                game.entities['bot1'].score -= 5; //TODO magic number
+                game.entities[bullet_id_counter] = new OreBullet(game.canvas.getContext('2d'), this.entity_id, this.x, this.y, game.entities[this.current_target].x, game.entities[this.current_target].y, 10, 10, this.color);
+                
+                if(this.is_on_right_side) {
+                    game.score_team_2 -= 5; //TODO magic number
+                } else {
+                    game.score_team_1 -= 5; //TODO magic number
+                };
             }
         }
     }
@@ -869,15 +946,15 @@ function position_penalty_logic() {
     // TODO - make this work with arbitrary numbers of players belonging to one of two teams
     // apply penalties for being offsides
     if (game.entities['player'].x > CANVAS_WIDTH/2) {
-        game.entities['player'].score -= .0025*(Date.now() - game.last_update);
-        if(game.entities['player'].score < 0) {
-            game.entities['player'].score = 0;
+        game.score_team_1 -= .0025*(Date.now() - game.last_update);
+        if(game.score_team_1 < 0) {
+            game.score_team_1 = 0;
         }
     }
     if (game.entities['bot1'].x < CANVAS_WIDTH/2) {
-        game.entities['bot1'].score -= .0025*(Date.now() - game.last_update);
-        if(game.entities['bot1'].score < 0) {
-            game.entities['bot1'].score = 0;
+        game.score_team_2 -= .0025*(Date.now() - game.last_update);
+        if(game.score_team_2 < 0) {
+            game.score_team_2 = 0;
         }
     }
 
@@ -1004,13 +1081,13 @@ function render_board() {
     // Draw the grid
     context.strokeStyle = '#888888';
     context.lineWidth = 1;
-    for (let i = 0; i < canvas.width; i += END_ZONE_WIDTH) {
+    for (let i = 0; i < canvas.width; i += END_ZONE_WIDTH/3) {
         context.beginPath();
         context.moveTo(i, 0);
         context.lineTo(i, canvas.height);
         context.stroke();
     }
-    for (let i = 0; i < canvas.height; i += END_ZONE_WIDTH) {
+    for (let i = 0; i < canvas.height; i += END_ZONE_WIDTH/3) {
         context.beginPath();
         context.moveTo(0, i);
         context.lineTo(canvas.width, i);
@@ -1050,8 +1127,8 @@ function render_board() {
 function render_score() {
     let scoreDivLeft = document.getElementById('scoreDivLeft');
     let scoreDivRight = document.getElementById('scoreDivRight');
-    scoreDivLeft.innerHTML = 'Score: ' + Math.floor(game.entities['player'].score);
-    scoreDivRight.innerHTML = 'Score: ' + Math.floor(game.entities['bot1'].score);
+    scoreDivLeft.innerHTML = 'Score: ' + Math.floor(game.score_team_1);
+    scoreDivRight.innerHTML = 'Score: ' + Math.floor(game.score_team_2);
 
 
 }
