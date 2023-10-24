@@ -3,24 +3,15 @@ const RENDER_REFRESH_TIME = 16; // time in ms to wait after rendering before ren
 let game;
 let pressedKeys = {};
 let canvas;
-// let botAgent; // the test bot agent that will be used to play the game
-// let botAgent2;
-// let botAgent3;
-// let botAgent4;
-// let botAgent5;
-// let botAgent6;
-// let botAgent7;
 
-let points_to_win = 500; // default, can be overriden in the new game constructor
+const END_ZONE_WIDTH = 200;
+const CANVAS_WIDTH = 2000;
+const CANVAS_HEIGHT = 1000;
+const PLAYER_DIAMETER = 50;
+const BG_GRID_SIZE = 33;
 
-
-let END_ZONE_WIDTH = 100;
-let CANVAS_WIDTH = 2000;
-let CANVAS_HEIGHT = 1000;
-let PLAYER_DIAMETER = 50;
-
-const BULLET_SPEED = 10;
-let bullet_id_counter = 0;
+const BULLET_SPEED = 10; // bullets are launched at fixed speed and do not experience drag
+let bullet_id_counter = 0; // used to give each bullet a unique id, so that they can be deleted later
 
 function loadApp() {
     console.log('loadApp() called');   
@@ -71,7 +62,6 @@ function loadApp() {
     });
 
     gameDiv.appendChild(canvas);
-    gameDiv.appendChild(get_instructions_div())
     
     //Add score readout
     //Add score for each player
@@ -140,6 +130,9 @@ function loadApp() {
     
     game = new NewGamePlus(canvas);
 
+    gameDiv.appendChild(get_instructions_div()) // requires game to be instantiated first
+    
+
     // Enemy bots
     // botAgent = new DumbBot(1, true); //pass it the entity_id for the corresponding GamePlayer entity
     // botAgent2 = new DumbBot(7, true); //pass it the entity_id for the corresponding GamePlayer entity
@@ -177,15 +170,15 @@ function get_instructions_div() {
     div.appendChild(h2);
 
     let p1 = document.createElement('p');
-    p1.innerHTML = 'Use the arrow keys or WAS to move the player around the screen. Score points by pushing the green ore into the end zone matching your color.';
+    p1.innerHTML = 'Use the arrow or WASD keys to move the player around the screen. Score points by pushing the green ore into the end zone matching your color.';
     div.appendChild(p1);
 
     let p2 = document.createElement('p');
-    p2.innerHTML = 'Shoot ore bullets with the mouse, but beware they cost 5 points each. You also lose points for lingering on the enemy\'s side.';
+    p2.innerHTML = 'Shoot ore bullets with the mouse, but beware they cost ' + game.bullet_cost + ' points each. You also lose points for lingering on the enemy\'s side.';
     div.appendChild(p2);
 
     let p3 = document.createElement('p');
-    p3.innerHTML = 'First to ' + points_to_win + ' points wins!';
+    p3.innerHTML = 'First to ' + game.points_to_win + ' points wins!';
     div.appendChild(p3);
 
     return div;
@@ -501,11 +494,13 @@ class GameObstacle {
 }
 
 class Bumper extends GameObstacle {
-    constructor(context, pt1, pt2, pt3, color) {
+    constructor(context, pt1, pt2, pt3, bump_right, bump_down, color) {
         super(context, 'bumper', 'triangle', color);
         this.pt1 = pt1;
         this.pt2 = pt2;
         this.pt3 = pt3;
+        this.bump_right = bump_right; // if true, the bumper will push entities to the right, otherwise to the left
+        this.bump_down = bump_down; // if true, the bumper will push entities down, otherwise up
     }
 
     draw() {
@@ -667,19 +662,25 @@ class NewGamePlus {
         this.score_team_1 = 50;
         this.score_team_2 = 50;
 
-        this.num_bots = 7;
-        this.num_ore = 5;
+        this.num_bots_team_1 = 2;
+        this.num_bots_team_2 = 5;
+        this.num_bots = 0; // will be incremented in add_bot() // this.num_bots_team_1 + this.num_bots_team_2;
         
-        // points_to_win = 100;
+        this.num_ore = 5;
+
+        this.offside_punishment_rate = .00125;
+        this.bullet_cost = 3;
+
+        this.points_to_win = 500; 
 
         this.obstacles = {};
-        this.obstacles['bumper1'] = new Bumper(context, [0,0], [0,END_ZONE_WIDTH], [END_ZONE_WIDTH, 0], '#888888');
-        this.obstacles['bumper2'] = new Bumper(context, [0,canvas.height], [0,canvas.height - END_ZONE_WIDTH], [END_ZONE_WIDTH, canvas.height], '#888888');
-        this.obstacles['bumper3'] = new Bumper(context, [canvas.width,0], [canvas.width,END_ZONE_WIDTH], [canvas.width - END_ZONE_WIDTH, 0], '#888888');
-        this.obstacles['bumper4'] = new Bumper(context, [canvas.width,canvas.height], [canvas.width,canvas.height - END_ZONE_WIDTH], [canvas.width - END_ZONE_WIDTH, canvas.height], '#888888');
+        this.obstacles['bumper1'] = new Bumper(context, [0,0], [0, END_ZONE_WIDTH/2], [END_ZONE_WIDTH/2, 0], true, true, '#888888');
+        this.obstacles['bumper2'] = new Bumper(context, [0,canvas.height], [0,canvas.height - END_ZONE_WIDTH/2], [END_ZONE_WIDTH/2, canvas.height], true, false, '#888888');
+        this.obstacles['bumper3'] = new Bumper(context, [canvas.width,0], [canvas.width, END_ZONE_WIDTH/2], [canvas.width - END_ZONE_WIDTH/2, 0], false, true, '#888888');
+        this.obstacles['bumper4'] = new Bumper(context, [canvas.width,canvas.height], [canvas.width,canvas.height - END_ZONE_WIDTH/2], [canvas.width - END_ZONE_WIDTH/2, canvas.height], false, false, '#888888');
 
         this.entities = {};
-        this.entities['player'] = new GamePlayer(context, 'Zeke', END_ZONE_WIDTH, canvas.height/2, '#FF6666');
+        this.entities['player'] = new GamePlayer(context, 'Player 1', END_ZONE_WIDTH, canvas.height/2, '#FF6666');
         // this.entities[] = new Square(context, 0, 0, 20, 20, '#DD0000');
         
         this.entities['ore1'] = new Ore(context, canvas.width/2, 150, '#00BBBB', .1, 75);
@@ -688,40 +689,44 @@ class NewGamePlus {
         this.entities['ore4'] = new Ore(context, canvas.width/2, canvas.height - 300, '#00BBBB', .1, 50);
         this.entities['ore5'] = new Ore(context, canvas.width/2, canvas.height - 150, '#00BBBB', .1, 75);
         
-        for (let i = 1; i <= this.num_bots; i++) {
-            let starting_x;
-            let starting_y;
-            let color;
-            let on_the_right;
-
-            if (i % 2 != 0) {
-                starting_x = canvas.width - END_ZONE_WIDTH + PLAYER_DIAMETER;
-                starting_y = Math.random()*canvas.height;
-                color = '#0000DD';
-                on_the_right = true;
-
-            } else {
-                starting_x = END_ZONE_WIDTH;
-                starting_y = Math.random()*canvas.height;
-                color = '#DD0000';
-                on_the_right = false;
-            }
-            this.entities['bot' + i] = new DumbBot(context, 'Bot ' + i, starting_x, starting_y, color, on_the_right);
+        for (let i = 1; i <= this.num_bots_team_1; i++) {
+            this.add_bot(context, false)
         }
-        // this.entities['bot1'] = new DumbBot(context, 1, canvas.width - END_ZONE_WIDTH, canvas.height/2, '#0000DD', true);
-        // this.entities['bot2'] = new DumbBot(context, 2, canvas.width - END_ZONE_WIDTH, canvas.height/3, '#0000DD', true);
-        // this.entities['bot3'] = new DumbBot(context, 3, canvas.width - END_ZONE_WIDTH, canvas.height*2/3, '#0000DD', true);
-        // this.entities['bot4'] = new DumbBot(context, 4, canvas.width - END_ZONE_WIDTH, canvas.height/5, '#0000DD', true);
-        // this.entities['bot5'] = new DumbBot(context, 5, canvas.width - END_ZONE_WIDTH, canvas.height*4/5, '#0000DD', true);
+        for (let i = 1; i <= this.num_bots_team_2; i++) {
+            this.add_bot(context, true)
+        }
         
-        // this.entities['bot6'] = new DumbBot(context, 6, END_ZONE_WIDTH, canvas.height*1/3, '#DD0000', false);
-        // this.entities['bot7'] = new DumbBot(context, 7, END_ZONE_WIDTH, canvas.height*2/3, '#DD0000', false);
-        // this.entities['bot8'] = new DumbBot(context, 8, END_ZONE_WIDTH, canvas.height/5, '#DD0000', false);
-        // this.entities['bot9'] = new DumbBot(context, 9, END_ZONE_WIDTH, canvas.height*4/5, '#DD0000', false);
-        
-        // this.entities[] = new GamePlayer(context, 5, 1750, 600, '#0000DD');
+    }
 
-        // this.entities[] = new Circle(context, 0, 200, 15, '#444444');
+    add_bot(context, is_on_right_side) {
+        let starting_x;
+        let starting_y;
+        let color;
+        this.num_bots += 1;
+
+        if (is_on_right_side) {
+            starting_x = canvas.width - END_ZONE_WIDTH + PLAYER_DIAMETER;
+            starting_y = Math.random()*canvas.height;
+            color = '#0000DD';
+
+        } else {
+            starting_x = END_ZONE_WIDTH;
+            starting_y = Math.random()*canvas.height;
+            color = '#DD0000';
+        }
+        this.entities['bot' + this.num_bots] = new DumbBot(context, 'Bot ' + this.num_bots, starting_x, starting_y, color, is_on_right_side);
+    }
+
+    game_continues() { 
+        // Return true if the game is still going
+        // Return false if the game is over
+        if (this.score_team_1 >= this.points_to_win | this.score_team_2 >= this.points_to_win) {
+            render_game_over();
+            return false;
+        }
+    
+        return true;
+    
     }
 }
 
@@ -783,7 +788,7 @@ class DumbBot extends GamePlayer {
     consider_shooting_at_target() {
         //TODO improve this
 
-        if (Math.random() > .997) {
+        if (Math.random() > .9975) {
             this.set_shot_target();
             // console.log('shoot')
             let distance_x = game.entities[this.shot_target].x - this.x;
@@ -811,14 +816,14 @@ class DumbBot extends GamePlayer {
             //     lead_distance_x = game.entities[this.shot_target].v_x * 10;
             
 
-            if((this.is_on_right_side & game.score_team_2 >= 5 & distance_x < -1*game.entities[this.shot_target].radius) | (!this.is_on_right_side & game.score_team_1 >= 5 & distance_x > game.entities[this.shot_target].radius)){
+            if((this.is_on_right_side & game.score_team_2 >= game.bullet_cost & distance_x < -1*game.entities[this.shot_target].radius) | (!this.is_on_right_side & game.score_team_1 >= game.bullet_cost & distance_x > game.entities[this.shot_target].radius)){
                 bullet_id_counter += 1;
                 game.entities[bullet_id_counter] = new OreBullet(game.canvas.getContext('2d'), this.entity_id, this.x, this.y, dest_x, dest_y, 10, 10, this.color);
                 
                 if(this.is_on_right_side) {
-                    game.score_team_2 -= 5; //TODO magic number
+                    game.score_team_2 -= game.bullet_cost; //TODO magic number
                 } else {
-                    game.score_team_1 -= 5; //TODO magic number
+                    game.score_team_1 -= game.bullet_cost; //TODO magic number
                 };
 
                 console.log('shot fired ' + bullet_id_counter + ' at ' + Math.round(dest_x) + ', ' + Math.round(dest_y));
@@ -848,22 +853,23 @@ class DumbBot extends GamePlayer {
         let target_option_ids = ['ore1', 'ore2', 'ore3', 'ore4', 'ore5'];
         for (let i = 0; i < target_weights.length; i++) {
             let dist = 1 / (Math.sqrt((game.entities['ore' + (i + 1)].x - this.x)**2 + (game.entities['ore' + (i + 1)].y - this.y)**2)/canvas.width);
+            dist *= game.entities['ore' + (i + 1)].ore**2;
             target_weights[i] = dist;
         }
-
+        console.log(target_weights)
         this.shot_target = target_option_ids[target_weights.indexOf(Math.max(...target_weights))];
     }
     set_homing_target() {
         // consider the distance to each ore, the relative size of the ore, and whether or not the ore is to the left or right of the player
         // TODO
-        let target_weights = [0, 0, 0, 0, 0];
+        let target_weights = [0.00001, 0, 0, 0, 0];
         let target_option_ids = ['ore1', 'ore2', 'ore3', 'ore4', 'ore5'];
         
-        target_weights[0] = (1/Math.sqrt((game.entities['ore1'].x - this.x)**2 + (game.entities['ore1'].y - this.y)**2))*(game.entities['ore1'].ore**33)//; *(this.x - game.entities[2].x);
-        target_weights[1] = (1/Math.sqrt((game.entities['ore2'].x - this.x)**2 + (game.entities['ore2'].y - this.y)**2))*(game.entities['ore2'].ore**33)//; *(this.x - game.entities[3].x);
-        target_weights[2] = (1/Math.sqrt((game.entities['ore3'].x - this.x)**2 + (game.entities['ore3'].y - this.y)**2))*(game.entities['ore3'].ore**33)//; *(this.x - game.entities[4].x);
-        target_weights[3] = (1/Math.sqrt((game.entities['ore4'].x - this.x)**2 + (game.entities['ore4'].y - this.y)**2))*(game.entities['ore4'].ore**33)//; *(this.x - game.entities[5].x);
-        target_weights[4] = (1/Math.sqrt((game.entities['ore5'].x - this.x)**2 + (game.entities['ore5'].y - this.y)**2))*(game.entities['ore5'].ore**33)//; *(this.x - game.entities[6].x);
+        target_weights[0] = (1/Math.sqrt((game.entities['ore1'].x - this.x)**2 + (game.entities['ore1'].y - this.y)**2))*(game.entities['ore1'].ore**3)//; *(this.x - game.entities[2].x);
+        target_weights[1] = (1/Math.sqrt((game.entities['ore2'].x - this.x)**2 + (game.entities['ore2'].y - this.y)**2))*(game.entities['ore2'].ore**3)//; *(this.x - game.entities[3].x);
+        target_weights[2] = (1/Math.sqrt((game.entities['ore3'].x - this.x)**2 + (game.entities['ore3'].y - this.y)**2))*(game.entities['ore3'].ore**3)//; *(this.x - game.entities[4].x);
+        target_weights[3] = (1/Math.sqrt((game.entities['ore4'].x - this.x)**2 + (game.entities['ore4'].y - this.y)**2))*(game.entities['ore4'].ore**3)//; *(this.x - game.entities[5].x);
+        target_weights[4] = (1/Math.sqrt((game.entities['ore5'].x - this.x)**2 + (game.entities['ore5'].y - this.y)**2))*(game.entities['ore5'].ore**3)//; *(this.x - game.entities[6].x);
         
         if(this.is_on_right_side) {
             target_weights[0] *= game.entities['ore1'].x**4;
@@ -910,22 +916,8 @@ function endGame() {
     console.log('endGame() called');
 }
 
-function game_continues() { 
-    // Return true if the game is still going
-    // Return false if the game is over
 
-    // TODO
-    if (game.score_team_1 >= points_to_win | game.score_team_2 >= points_to_win) {
-        render_game_over();
-        return false;
-        
-    }
-
-    return true;
-
-}
 function render_game_over() {
-    // TODO
     console.log('render_game_over() called');
     let context = game.canvas.getContext('2d');
     
@@ -943,12 +935,10 @@ function render_game_over() {
         context.fillText('Team 2 Wins!', canvas.width/2, canvas.height/2);
     }
 
-    
-
 }
 
 function game_loop_client() {
-    if (game_continues()) {
+    if (game.game_continues()) {
         // get user input
         process_user_input();
         process_bot_input();
@@ -1073,10 +1063,9 @@ function positional_logic_update() {
 function position_penalty_logic() {
     // TODO - make this work with arbitrary numbers of players belonging to one of two teams
     // apply penalties for being offsides
-    let punishment_per_second = .00125;
 
     if (game.entities['player'].x > CANVAS_WIDTH/2) {
-        game.score_team_1 -= punishment_per_second*(Date.now() - game.last_update);
+        game.score_team_1 -= game.offside_punishment_rate*(Date.now() - game.last_update);
         if(game.score_team_1 < 0) {
             game.score_team_1 = 0;
         }
@@ -1085,14 +1074,14 @@ function position_penalty_logic() {
     for (let i = 1; i <= game.num_bots; i++) {
         if (game.entities['bot' + i].is_on_right_side) {
             if (game.entities['bot' + i].x < CANVAS_WIDTH/2) {
-                game.score_team_2 -= punishment_per_second*(Date.now() - game.last_update);
+                game.score_team_2 -= game.offside_punishment_rate*(Date.now() - game.last_update);
                 if(game.score_team_2 < 0) {
                     game.score_team_2 = 0;
                 }
             }
         } else {
             if (game.entities['bot' + i].x > CANVAS_WIDTH/2) {
-                game.score_team_1 -= punishment_per_second*(Date.now() - game.last_update);
+                game.score_team_1 -= game.offside_punishment_rate*(Date.now() - game.last_update);
                 if(game.score_team_1 < 0) {
                     game.score_team_1 = 0;
                 }
@@ -1112,8 +1101,11 @@ function check_if_collision(entity1, entity2) {
         return circle_rectangle_collision_check(entity1, entity2);
     } else if (entity1.shape == 'square' && entity2.shape == 'circle') {
         return circle_rectangle_collision_check(entity2, entity1);
-    } else if (entity1.shape == 'circle' && entity2.shape == 'triangle') {
-        return triangle_collision_check(entity1, entity2);
+    } else if ((entity1.shape == 'circle') && entity2.shape == 'triangle') {
+        return circle_triangle_collision_check(entity1, entity2);
+    } else if ((entity1.shape == 'square') && entity2.shape == 'triangle') {
+        return square_triangle_collision_check(entity1, entity2);
+    
     } else {
 
         // console.log('check!')
@@ -1187,40 +1179,56 @@ function point_square_collision_check(square, point) {
 
     return false;
 }
-function triangle_collision_check(entity, triangle) {
-    return false //TODO
+function square_triangle_collision_check(entity, triangle) {
+    //TODO
 
-    if (entity.x < triangle.pt1[0] && entity.x < triangle.pt2[0] && entity.x < triangle.pt3[0]) {
-        return false;
-    } else if (entity.x > triangle.pt1[0] && entity.x > triangle.pt2[0] && entity.x > triangle.pt3[0]) {
-        return false;
-    } else if (entity.y < triangle.pt1[1] && entity.y < triangle.pt2[1] && entity.y < triangle.pt3[1]) {
-        return false;
-    } else if (entity.y > triangle.pt1[1] && entity.y > triangle.pt2[1] && entity.y > triangle.pt3[1]) {
-        return false;
-
-    } else {
-        return true;
-    }
 
     return false;
 
-    // triangle.p1[0]
+}
 
+function circle_triangle_collision_check(entity, triangle) {
+    //if the equation of the line is ax+by+c=0, then a point x0, y0 has distance (ax0+by0+c)/sqrt(a^2+b^2) from the line
+    //to get the equation of the line: Find the slope using the slope formula
+    //slope = (y2 - y1)/(x2 - x1)
+    //Use the slope and one of the points to solve for the y-intercept (b)
+        // One of your points can replace the x and y, and the slope you just calculated replaces the m of your equation y = mx + c. Then b is the only variable left. Use the tools you know for solving for a variable to solve for b.
+    //Once you know the value for m and the value for b, you can plug these into the slope-intercept form of a line (y = mx + c) to get the equation for the line.
+    let line_collision_count = 0;
 
-    // //TODO
-    // //Check if a triangle and a circle or square are colliding
-    // if(entity.type == 'circle') {
+    // console.log('circle_triangle_collision_check() called');
 
-    // } else if (entity.type == 'square') {
-    //     // Check each vertex of the triangle to see if it is inside the square
-    //     point_square_collision_check()
-
+    // if (entity.x > END_ZONE_WIDTH) { return false};
+    let d1 = 0
+    let d3 = 0;
+    // //check points 1-2
+    // let m1 = (triangle.pt2[1] - triangle.pt1[1])/(triangle.pt2[0] - triangle.pt1[0]+.0000001);
+    // let b1 = triangle.pt1[1] - m1*triangle.pt1[0];
+    // let d1 = (m1*entity.x -1*entity.y + b1)/(Math.sqrt(m1**2 + 1));
+    // //console.log(Math.round(entity.x) + ', ' + Math.round(entity.y) + ' distance ' + d1);
+    // if (Math.abs(d1) <= entity.radius) { 
+    //     line_collision_count += 1
     // }
 
+    //check points 2-3
+    let m2 = (triangle.pt3[1] - triangle.pt2[1])/(triangle.pt3[0] - triangle.pt2[0]+.0000001);
+    let b2 = triangle.pt2[1] - m2*triangle.pt2[0];
+    let d2 = (m2*entity.x -1*entity.y + b2)/(Math.sqrt(m2**2 + 1));
+    if (Math.abs(d2) <= entity.radius) { 
+        line_collision_count += 1
+    }
 
-    // console.log('triangle hit?')
-    // return false;
+    // //check points 3-1
+    // let m3 = (triangle.pt1[1] - triangle.pt3[1])/(triangle.pt1[0] - triangle.pt3[0]+.0000001);
+    // let b3 = triangle.pt3[1] - m3*triangle.pt3[0];
+    // let d3 = (m3*entity.x -1*entity.y + b3)/(Math.sqrt(m3**2 + 1));
+    // if (Math.abs(d3) <= entity.radius) { 
+    //     line_collision_count += 1
+    // }
+
+    // console.log(Math.abs(Math.round(d1)), Math.abs(Math.round(d2)), Math.abs(Math.round(d3)), line_collision_count)
+    
+    return line_collision_count > 0; //TODO
 }
 
 
@@ -1255,21 +1263,41 @@ function resolve_collisions(collisions) {
     for (let i = 0; i < collisions.length; i++) {
 
         // console.log('Resolving collision between ' + collisions[i][0].type + ' and ' + collisions[i][1].type);
-        let entity1 = collisions[i][0];
-        let entity2 = collisions[i][1];
-        let vCollision = {x: entity2.x - entity1.x, y: entity2.y - entity1.y};
-        let distance = Math.sqrt((entity2.x-entity1.x)*(entity2.x-entity1.x) + (entity2.y-entity1.y)*(entity2.y-entity1.y));
-        let vCollisionNorm = {x: vCollision.x / distance, y: vCollision.y / distance};
-        let vRelativeVelocity = {x: entity1.v_x - entity2.v_x, y: entity1.v_y - entity2.v_y};
-        let speed = vRelativeVelocity.x * vCollisionNorm.x + vRelativeVelocity.y * vCollisionNorm.y;
-        if (speed < 0) {
-            break;
-        }
-        entity1.v_x -= (speed * vCollisionNorm.x);
-        entity1.v_y -= (speed * vCollisionNorm.y);
-        entity2.v_x += (speed * vCollisionNorm.x);
-        entity2.v_y += (speed * vCollisionNorm.y);
 
+        if(collisions[i][1].type == 'bumper') {
+            // Bumper stays put, entity bounces off of it with a new velocity
+            // TODO
+            let entity1 = collisions[i][0];
+            let bumper = collisions[i][1];
+            if (bumper.bump_right) {
+                entity1.v_x = 1*Math.abs(entity1.v_x);
+            } else {
+                entity1.v_x = -1*Math.abs(entity1.v_x);
+            }
+            if (bumper.bump_down) {
+                entity1.v_y = 1*Math.abs(entity1.v_y);
+            } else {
+                entity1.v_y = -1*Math.abs(entity1.v_y);
+            }           
+
+
+        } else {
+
+            let entity1 = collisions[i][0];
+            let entity2 = collisions[i][1];
+            let vCollision = {x: entity2.x - entity1.x, y: entity2.y - entity1.y};
+            let distance = Math.sqrt((entity2.x-entity1.x)*(entity2.x-entity1.x) + (entity2.y-entity1.y)*(entity2.y-entity1.y));
+            let vCollisionNorm = {x: vCollision.x / distance, y: vCollision.y / distance};
+            let vRelativeVelocity = {x: entity1.v_x - entity2.v_x, y: entity1.v_y - entity2.v_y};
+            let speed = vRelativeVelocity.x * vCollisionNorm.x + vRelativeVelocity.y * vCollisionNorm.y;
+            if (speed < 0) {
+                break;
+            }
+            entity1.v_x -= (speed * vCollisionNorm.x);
+            entity1.v_y -= (speed * vCollisionNorm.y);
+            entity2.v_x += (speed * vCollisionNorm.x);
+            entity2.v_y += (speed * vCollisionNorm.y);
+        };
     }
 }
 
@@ -1295,13 +1323,13 @@ function render_board() {
     // Draw the grid
     context.strokeStyle = '#888888';
     context.lineWidth = 1;
-    for (let i = 0; i < canvas.width; i += END_ZONE_WIDTH/3) {
+    for (let i = 0; i < canvas.width; i += BG_GRID_SIZE) {
         context.beginPath();
         context.moveTo(i, 0);
         context.lineTo(i, canvas.height);
         context.stroke();
     }
-    for (let i = 0; i < canvas.height; i += END_ZONE_WIDTH/3) {
+    for (let i = 0; i < canvas.height; i += BG_GRID_SIZE) {
         context.beginPath();
         context.moveTo(0, i);
         context.lineTo(canvas.width, i);
