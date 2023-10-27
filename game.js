@@ -4,9 +4,12 @@ let game;
 let pressedKeys = {};
 let canvas;
 
+const MAP_WIDTH = 1800;
+const MAP_HEIGHT = 900;
+
 const END_ZONE_WIDTH = 200;
-const CANVAS_WIDTH = 2000;
-const CANVAS_HEIGHT = 1000;
+const CANVAS_WIDTH = 1800;
+const CANVAS_HEIGHT = 900;
 const PLAYER_DIAMETER = 50;
 const BG_GRID_SIZE = 33;
 
@@ -17,7 +20,7 @@ function loadApp() {
     console.log('loadApp() called');   
 
     let gameDiv = document.getElementById('game_div');
-
+    
     canvas = document.createElement('canvas');
     canvas.id = 'gameCanvas';
     canvas.width = CANVAS_WIDTH;
@@ -47,16 +50,15 @@ function loadApp() {
             if (num_player_bullets < game.entities['player'].bullet_count_max & game.score_team_1 >= 5) {
                 bullet_id_counter += 1;
                 game.entities['bullet' + bullet_id_counter] = new OreBullet(canvas.getContext('2d'), 'player', game.entities['player'].x, game.entities['player'].y, mousePos['x'], mousePos['y'], 10, 10, '#FF6666');
-                game.score_team_1 -= 5;
+                game.score_team_1 -= game.bullet_cost;
             };
         };
 
         function get_mouse_position(canvas, event) {
             let rect = canvas.getBoundingClientRect();
             return {
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top
-                
+                x: event.clientX - rect.left - game.offset_x,
+                y: event.clientY - rect.top - game.offset_y                
             };
         }
     });
@@ -103,7 +105,7 @@ function loadApp() {
     let debugDiv = document.createElement('div');
     debugDiv.id = 'debugDiv';
     debugDiv.style.position = 'absolute';
-    debugDiv.style.top = (canvas.height + 250) + 'px';
+    debugDiv.style.top = 10 + 'px';
     debugDiv.style.left = '50px';
     debugDiv.style.width = canvas.width/2;
     debugDiv.style.height = '50px';
@@ -132,20 +134,6 @@ function loadApp() {
 
     gameDiv.appendChild(get_instructions_div()) // requires game to be instantiated first
     
-
-    // Enemy bots
-    // botAgent = new DumbBot(1, true); //pass it the entity_id for the corresponding GamePlayer entity
-    // botAgent2 = new DumbBot(7, true); //pass it the entity_id for the corresponding GamePlayer entity
-    // botAgent3 = new DumbBot(8, true); //pass it the entity_id for the corresponding GamePlayer entity
-    // botAgent4 = new DumbBot(9, true); //pass it the entity_id for the corresponding GamePlayer entity
-    // botAgent5 = new DumbBot(10, true); //pass it the entity_id for the corresponding GamePlayer entity
-
-    // Friendly bots
-    // botAgent6 = new DumbBot(11, false); //pass it the entity_id for the corresponding GamePlayer entity
-    // botAgent7 = new DumbBot(12, false); //pass it the entity_id for the corresponding GamePlayer entity
-
-    
-            
     // draw the initial board
     render_board();
 
@@ -182,14 +170,8 @@ function get_instructions_div() {
     div.appendChild(p3);
 
     return div;
-    
-    // <!-- <div id = "instructions">
-    // <h2>How To Play</h2>
-    // <p>Use the arrow keys or WAS to move the player around the screen. Score points by pushing the green ore into the end zone matching your color.</p>
-    // <p>Shoot ore bullets with the mouse, but beware they cost 5 points each. You also lose points for lingering on the enemy's side.</p>
-    // <p>First to 1000 points wins!</p>
-// </div>
 }
+
 class GameEntity {
     constructor(context, type, shape, x, y, color) {
         this.context = context;
@@ -254,9 +236,9 @@ class Square extends GameEntity {
         this.bouncy_wall_check();
     }
 
-    draw() {
+    draw(offset_x, offset_y) {
         this.context.fillStyle = this.color;
-        this.context.fillRect(this.x, this.y, this.width, this.height);
+        this.context.fillRect(this.x + offset_x, this.y + offset_y, this.width, this.height);
         
     }
 
@@ -266,8 +248,8 @@ class Square extends GameEntity {
             this.v_x *= -.5;
             this.acc_x *= -.2;
         }
-        if (this.x + this.width > game.canvas.width) {
-            this.x = game.canvas.width - this.width;
+        if (this.x + this.width > MAP_WIDTH) {
+            this.x = MAP_WIDTH - this.width;
             this.v_x *= -.5;
             this.acc_x *= -.2;
         }
@@ -276,8 +258,8 @@ class Square extends GameEntity {
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
-        if (this.y + this.height > game.canvas.height) {
-            this.y = game.canvas.height - this.height;
+        if (this.y + this.height > MAP_HEIGHT) {
+            this.y = MAP_HEIGHT - this.height;
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
@@ -340,8 +322,8 @@ class OreBullet extends Square {
             this.acc_x *= -1;
             this.bounces_left -= 1;
         }
-        if (this.x + this.width > game.canvas.width) {
-            this.x = game.canvas.width - this.width;
+        if (this.x + this.width > MAP_WIDTH) {
+            this.x = MAP_WIDTH - this.width;
             this.v_x *= -1;
             this.acc_x *= -1;
             this.bounces_left -= 1;
@@ -352,8 +334,8 @@ class OreBullet extends Square {
             this.acc_y *= -1;
             this.bounces_left -= 1;
         }
-        if (this.y + this.height > game.canvas.height) {
-            this.y = game.canvas.height - this.height;
+        if (this.y + this.height > MAP_HEIGHT) {
+            this.y = MAP_HEIGHT - this.height;
             this.v_y *= -1;
             this.acc_y *= -1;
             this.bounces_left -= 1;
@@ -416,9 +398,12 @@ class Circle extends GameEntity {
         this.bouncy_wall_check();
     }
 
-    draw() {
+    draw(offset_x, offset_y) {
+        let pos_x = this.x + offset_x;
+        let pos_y = this.y + offset_y;
+
         this.context.beginPath();
-        this.context.arc(this.x, this.y, this.diameter/2, 0, 2 * Math.PI, false);
+        this.context.arc(pos_x, pos_y, this.diameter/2, 0, 2 * Math.PI, false);
         this.context.fillStyle = this.color;
         this.context.fill();
         this.context.lineWidth = 1;
@@ -432,8 +417,8 @@ class Circle extends GameEntity {
             this.v_x *= -.5;
             this.acc_x *= -.2;
         }
-        if (this.x + this.radius > game.canvas.width) {
-            this.x = game.canvas.width - this.radius;
+        if (this.x + this.radius > MAP_WIDTH) {
+            this.x = MAP_WIDTH - this.radius;
             this.v_x *= -.5;
             this.acc_x *= -.2;
         }
@@ -442,8 +427,8 @@ class Circle extends GameEntity {
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
-        if (this.y + this.radius > game.canvas.height) {
-            this.y = game.canvas.height - this.radius;
+        if (this.y + this.radius > MAP_HEIGHT) {
+            this.y = MAP_HEIGHT - this.radius;
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
@@ -456,8 +441,8 @@ class GamePlayer extends Circle {
         let diameter = PLAYER_DIAMETER;
         super(context, x, y, diameter, color);
         this.player_name = player_name; 
-        this.max_acc_x = 1;
-        this.max_acc_y = 1;
+        this.max_acc_x = 1.5;
+        this.max_acc_y = 1.5;
         this.max_v_x = 5;
         this.max_v_y = 5;
 
@@ -472,12 +457,14 @@ class GamePlayer extends Circle {
         this.bullet_count_max = 20;
     }
 
-    draw() {
-        super.draw();
+    draw(offset_x, offset_y) {
+        super.draw(offset_x, offset_y);
         this.context.font = '24px serif';
         this.context.fillStyle = 'black';
         this.context.textAlign = 'center';
-        this.context.fillText(this.player_name, this.x, this.y - this.radius - 7);
+        let pos_x = this.x + offset_x;
+        let pos_y = this.y + offset_y;
+        this.context.fillText(this.player_name, pos_x, pos_y - this.radius - 7);
     }
 }
 
@@ -503,12 +490,12 @@ class Bumper extends GameObstacle {
         this.bump_down = bump_down; // if true, the bumper will push entities down, otherwise up
     }
 
-    draw() {
+    draw(offset_x, offset_y) {
         this.context.fillStyle = this.color;
         this.context.beginPath();
-        this.context.moveTo(this.pt1[0], this.pt1[1]);
-        this.context.lineTo(this.pt2[0], this.pt2[1]);
-        this.context.lineTo(this.pt3[0], this.pt3[1]);
+        this.context.moveTo(this.pt1[0] + offset_x, this.pt1[1] + offset_y);
+        this.context.lineTo(this.pt2[0] + offset_x, this.pt2[1] + offset_y);
+        this.context.lineTo(this.pt3[0] + offset_x, this.pt3[1] + offset_y);
         this.context.fill();
     }
 }
@@ -536,7 +523,7 @@ class Ore extends GameEntity {
         // this.y += this.vy * timePassed;
 
         // If the ore is in the middle, it grows
-        if (Math.abs(this.x - game.canvas.width/2) < Math.max(this.diameter, 1)) {
+        if (Math.abs(this.x - MAP_WIDTH/2) < Math.max(this.diameter, 1)) {
         // if (this.x == this.spawn_x && this.y == this.spawn_y) {
             this.ore += this.ore_growth_rate * timePassed;
 
@@ -575,9 +562,12 @@ class Ore extends GameEntity {
 
     }
 
-    draw() {
+    draw(offset_x, offset_y) {
+        let pos_x = this.x + offset_x;
+        let pos_y = this.y + offset_y;
+
         this.context.beginPath();
-        this.context.arc(this.x, this.y, this.diameter/2, 0, 2 * Math.PI, false);
+        this.context.arc(pos_x, pos_y, this.diameter/2, 0, 2 * Math.PI, false);
         this.context.fillStyle = this.color;
         this.context.fill();
         this.context.lineWidth = 1;
@@ -587,7 +577,7 @@ class Ore extends GameEntity {
         this.context.font = '14px serif';
         this.context.fillStyle = 'black';
         this.context.textAlign = 'center';
-        this.context.fillText(Math.round(this.ore), this.x, this.y);
+        this.context.fillText(Math.round(this.ore), pos_x, pos_y);
 
     }
 
@@ -597,8 +587,8 @@ class Ore extends GameEntity {
             this.v_x *= -.05;
             this.acc_x *= -.2;
         }
-        if (this.x + this.radius > game.canvas.width) {
-            this.x = game.canvas.width - this.radius;
+        if (this.x + this.radius > MAP_WIDTH) {
+            this.x = MAP_WIDTH - this.radius;
             this.v_x *= -.05;
             this.acc_x *= -.2;
         }
@@ -607,8 +597,8 @@ class Ore extends GameEntity {
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
-        if (this.y + this.radius > game.canvas.height) {
-            this.y = game.canvas.height - this.radius;
+        if (this.y + this.radius > MAP_HEIGHT) {
+            this.y = MAP_HEIGHT - this.radius;
             this.v_y *= -.5;
             this.acc_y *= -.2;
         }
@@ -625,7 +615,7 @@ class Ore extends GameEntity {
             game.score_team_2 += ore_to_transfer;
 
         }
-        if (this.x >= CANVAS_WIDTH - END_ZONE_WIDTH) { //TODO magic number
+        if (this.x >= MAP_WIDTH - END_ZONE_WIDTH) { //TODO magic number
             let ore_to_transfer = Math.min(this.ore, this.ore_score_rate);
             this.ore -= ore_to_transfer;
             
@@ -651,6 +641,22 @@ class Ore extends GameEntity {
     
 }
 
+
+// context, x, y, color, ore_points_initial, ore_points_max
+class OrePellet extends Ore {
+    constructor(context, x, y, color) {
+        let diameter = 10;
+        super(context, x, y, color, 10, 20);
+        this.type = 'ore_pellet';
+        this.max_acc_x = 0;
+        this.max_acc_y = 0;
+        this.max_v_x = 0;
+        this.max_v_y = 0;
+    }
+}
+
+
+
 class NewGamePlus {
     constructor(canvas) {        
         this.id = -1;
@@ -662,8 +668,8 @@ class NewGamePlus {
         this.score_team_1 = 50;
         this.score_team_2 = 50;
 
-        this.num_bots_team_1 = 2;
-        this.num_bots_team_2 = 5;
+        this.num_bots_team_1 = 0;
+        this.num_bots_team_2 = 0;
         this.num_bots = 0; // will be incremented in add_bot() // this.num_bots_team_1 + this.num_bots_team_2;
         
         this.num_ore = 5;
@@ -673,22 +679,29 @@ class NewGamePlus {
 
         this.points_to_win = 500; 
 
+        this.view_follows_player = false;
+        this.offset_x = 0; // set in render_board depending on view_follows_player
+        this.offset_y = 0; // set in render_board
+
+
         this.obstacles = {};
         this.obstacles['bumper1'] = new Bumper(context, [0,0], [0, END_ZONE_WIDTH/2], [END_ZONE_WIDTH/2, 0], true, true, '#888888');
-        this.obstacles['bumper2'] = new Bumper(context, [0,canvas.height], [0,canvas.height - END_ZONE_WIDTH/2], [END_ZONE_WIDTH/2, canvas.height], true, false, '#888888');
-        this.obstacles['bumper3'] = new Bumper(context, [canvas.width,0], [canvas.width, END_ZONE_WIDTH/2], [canvas.width - END_ZONE_WIDTH/2, 0], false, true, '#888888');
-        this.obstacles['bumper4'] = new Bumper(context, [canvas.width,canvas.height], [canvas.width,canvas.height - END_ZONE_WIDTH/2], [canvas.width - END_ZONE_WIDTH/2, canvas.height], false, false, '#888888');
+        this.obstacles['bumper2'] = new Bumper(context, [0,MAP_HEIGHT], [0,MAP_HEIGHT - END_ZONE_WIDTH/2], [END_ZONE_WIDTH/2, MAP_HEIGHT], true, false, '#888888');
+        this.obstacles['bumper3'] = new Bumper(context, [MAP_WIDTH,0], [MAP_WIDTH, END_ZONE_WIDTH/2], [MAP_WIDTH - END_ZONE_WIDTH/2, 0], false, true, '#888888');
+        this.obstacles['bumper4'] = new Bumper(context, [MAP_WIDTH,MAP_HEIGHT], [MAP_WIDTH,MAP_HEIGHT - END_ZONE_WIDTH/2], [MAP_WIDTH - END_ZONE_WIDTH/2, MAP_HEIGHT], false, false, '#888888');
 
         this.entities = {};
-        this.entities['player'] = new GamePlayer(context, 'Player 1', END_ZONE_WIDTH, canvas.height/2, '#FF6666');
+        this.entities['player'] = new GamePlayer(context, 'Player 1', END_ZONE_WIDTH, MAP_HEIGHT/2, '#FF6666');
         // this.entities[] = new Square(context, 0, 0, 20, 20, '#DD0000');
         
-        this.entities['ore1'] = new Ore(context, canvas.width/2, 150, '#00BBBB', .1, 75);
-        this.entities['ore2'] = new Ore(context, canvas.width/2, 300, '#00BBBB', .1, 50);
-        this.entities['ore3'] = new Ore(context, canvas.width/2, canvas.height/2, '#00BBBB', .1, END_ZONE_WIDTH);
-        this.entities['ore4'] = new Ore(context, canvas.width/2, canvas.height - 300, '#00BBBB', .1, 50);
-        this.entities['ore5'] = new Ore(context, canvas.width/2, canvas.height - 150, '#00BBBB', .1, 75);
+        this.entities['ore1'] = new Ore(context, MAP_WIDTH/2, 150, '#00BBBB', .1, 75);
+        this.entities['ore2'] = new Ore(context, MAP_WIDTH/2, 300, '#00BBBB', .1, 50);
+        this.entities['ore3'] = new Ore(context, MAP_WIDTH/2, MAP_HEIGHT/2, '#00BBBB', .1, 100);
+        this.entities['ore4'] = new Ore(context, MAP_WIDTH/2, MAP_HEIGHT - 300, '#00BBBB', .1, 50);
+        this.entities['ore5'] = new Ore(context, MAP_WIDTH/2, MAP_HEIGHT - 150, '#00BBBB', .1, 75);
         
+        this.entities['ore_pellet1'] = new OrePellet(context, 100, 100, '#00BBBB');
+
         for (let i = 1; i <= this.num_bots_team_1; i++) {
             this.add_bot(context, false)
         }
@@ -705,13 +718,13 @@ class NewGamePlus {
         this.num_bots += 1;
 
         if (is_on_right_side) {
-            starting_x = canvas.width - END_ZONE_WIDTH + PLAYER_DIAMETER;
-            starting_y = Math.random()*canvas.height;
+            starting_x = MAP_WIDTH - END_ZONE_WIDTH + PLAYER_DIAMETER;
+            starting_y = Math.random()*MAP_HEIGHT;
             color = '#0000DD';
 
         } else {
             starting_x = END_ZONE_WIDTH;
-            starting_y = Math.random()*canvas.height;
+            starting_y = Math.random()*MAP_HEIGHT;
             color = '#DD0000';
         }
         this.entities['bot' + this.num_bots] = new DumbBot(context, 'Bot ' + this.num_bots, starting_x, starting_y, color, is_on_right_side);
@@ -728,7 +741,40 @@ class NewGamePlus {
         return true;
     
     }
-}
+
+    game_loop_client() {
+        if (game.game_continues()) {
+            // get user input
+            process_user_input();
+            process_bot_input();
+
+            // game logic 
+            clean_up_objects(); // remove objects that are no longer needed
+            ore_score_check(); // apply scores to players for ore inside of the goal zones and shrink the ore
+            
+            // positional logic
+            positional_logic_update();
+            position_penalty_logic(); // apply penalties for being offsides
+
+            // collision detection
+            let collisions = collision_detection_update();
+
+            // collision resolution
+            if (collisions.length > 0) {
+                resolve_collisions(collisions);
+            }
+
+            // render
+            render_board(); // Redraw the game canvas        
+            render_score(); // Redraw the score
+
+            this.last_update = Date.now();
+        }
+        
+        setTimeout( () => { window.requestAnimationFrame(() => this.game_loop_client()); }, RENDER_REFRESH_TIME) // therefore each game loop will last at least tick_time ms    
+    }
+
+} // END of NewGamePlus class
 
 class DumbBot extends GamePlayer {
     constructor(context, id, x, y, color, is_on_right_side) {
@@ -747,7 +793,7 @@ class DumbBot extends GamePlayer {
 
         if (Math.abs(distance) < this.radius + game.entities[this.homing_target].radius + 5 | Math.random() > .95) {
         // if (Math.abs(distance) < this.radius + game.entities[this.homing_target].radius + 5 ) {
-            // this.set_target(Math.random()*CANVAS_WIDTH, Math.random()*CANVAS_HEIGHT);
+            // this.set_target(Math.random()*MAP_WIDTH, Math.random()*MAP_HEIGHT);
             // this.set_random_target();
             this.set_homing_target();
             distance_x = game.entities[this.homing_target].x - this.x;
@@ -923,7 +969,7 @@ function render_game_over() {
     
     // canvas.style.backgroundColor = 'black';
     //Clear the center of the canvas
-    context.clearRect(game.canvas.width/2 - 200, canvas.height/2 - 100, 400, 200);
+    context.clearRect(canvas.width/2 - 200, canvas.height/2 - 100, 400, 200);
     context.font = '48px serif';
 
     if (game.score_team_1 > game.score_team_2) {
@@ -935,38 +981,6 @@ function render_game_over() {
         context.fillText('Team 2 Wins!', canvas.width/2, canvas.height/2);
     }
 
-}
-
-function game_loop_client() {
-    if (game.game_continues()) {
-        // get user input
-        process_user_input();
-        process_bot_input();
-
-        // game logic 
-        clean_up_objects(); // remove objects that are no longer needed
-        ore_score_check(); // apply scores to players for ore inside of the goal zones and shrink the ore
-        
-        // positional logic
-        positional_logic_update();
-        position_penalty_logic(); // apply penalties for being offsides
-
-        // collision detection
-        let collisions = collision_detection_update();
-
-        // collision resolution
-        if (collisions.length > 0) {
-            resolve_collisions(collisions);
-        }
-
-        // render
-        render_board(); // Redraw the game canvas        
-        render_score(); // Redraw the score
-
-        game.last_update = Date.now();
-    }
-    
-    setTimeout( () => { window.requestAnimationFrame(() => game_loop_client()); }, RENDER_REFRESH_TIME) // therefore each game loop will last at least tick_time ms    
 }
 
 function process_user_input() {
@@ -1064,7 +1078,7 @@ function position_penalty_logic() {
     // TODO - make this work with arbitrary numbers of players belonging to one of two teams
     // apply penalties for being offsides
 
-    if (game.entities['player'].x > CANVAS_WIDTH/2) {
+    if (game.entities['player'].x > MAP_WIDTH/2) {
         game.score_team_1 -= game.offside_punishment_rate*(Date.now() - game.last_update);
         if(game.score_team_1 < 0) {
             game.score_team_1 = 0;
@@ -1073,14 +1087,14 @@ function position_penalty_logic() {
 
     for (let i = 1; i <= game.num_bots; i++) {
         if (game.entities['bot' + i].is_on_right_side) {
-            if (game.entities['bot' + i].x < CANVAS_WIDTH/2) {
+            if (game.entities['bot' + i].x < MAP_WIDTH/2) {
                 game.score_team_2 -= game.offside_punishment_rate*(Date.now() - game.last_update);
                 if(game.score_team_2 < 0) {
                     game.score_team_2 = 0;
                 }
             }
         } else {
-            if (game.entities['bot' + i].x > CANVAS_WIDTH/2) {
+            if (game.entities['bot' + i].x > MAP_WIDTH/2) {
                 game.score_team_1 -= game.offside_punishment_rate*(Date.now() - game.last_update);
                 if(game.score_team_1 < 0) {
                     game.score_team_1 = 0;
@@ -1309,63 +1323,103 @@ function render_board() {
     let canvas = document.getElementById('gameCanvas');
     let context = canvas.getContext('2d');
 
-    context.fillStyle= '#FFCCCC';  
-    context.fillRect(0, 0, canvas.width/2, canvas.height); // Clear the board
+    context.fillStyle= '#777777';  
+    context.fillRect(0, 0, canvas.width, canvas.height); // Clear the board
     context.stroke();
-
-    context.fillStyle='#CCCCFF';
-    context.fillRect(canvas.width/2, 0, canvas.width, canvas.height); // Clear the board
-    context.stroke();
-
     
 
+    if (game.view_follows_player) {
+        let pos_player_x = game.entities['player'].x;
+        let pos_player_y = game.entities['player'].y;
+
+        game.offset_x = canvas.width/2 - pos_player_x;
+        game.offset_y = canvas.height/2 - pos_player_y;
+    } else {
+        game.offset_x = 0;
+        game.offset_y = 0;    
+    }
+
+    let offset_x = game.offset_x;
+    let offset_y = game.offset_y;
+
+    console.log(offset_x, offset_y)
+
+    context.fillStyle= '#CCCCCC';  
+    context.fillRect(offset_x, offset_y, MAP_WIDTH + Math.max(offset_x, 0), MAP_HEIGHT + Math.max(offset_y, 0));
+    context.stroke();
+    
+
+    context.fillStyle='#FFCCCC'; // red background on the left
+    context.fillRect(offset_x, offset_y, MAP_WIDTH/2  + Math.max(offset_x, 0), MAP_HEIGHT + Math.max(offset_y, 0)); 
+    context.stroke();
+    console.log('umm', Math.max(MAP_WIDTH/2 + offset_x, 0), MAP_HEIGHT + Math.max(offset_y, 0))
+
+    context.fillStyle='#CCCCFF'; // blue background on the right
+    context.fillRect(MAP_WIDTH/2+offset_x, offset_y, MAP_WIDTH/2 + Math.max(offset_x, 0), MAP_HEIGHT + Math.max(offset_y, 0));
+    context.stroke();
 
     // Draw the grid
     context.strokeStyle = '#888888';
     context.lineWidth = 1;
-    for (let i = 0; i < canvas.width; i += BG_GRID_SIZE) {
+    for (let i = 0; i < MAP_WIDTH; i += BG_GRID_SIZE) {
         context.beginPath();
-        context.moveTo(i, 0);
-        context.lineTo(i, canvas.height);
+        context.moveTo(i+offset_x, offset_y);
+        context.lineTo(i+offset_x, MAP_HEIGHT + offset_y);
         context.stroke();
     }
-    for (let i = 0; i < canvas.height; i += BG_GRID_SIZE) {
+    for (let i = 0; i < MAP_HEIGHT; i += BG_GRID_SIZE) {
         context.beginPath();
-        context.moveTo(0, i);
-        context.lineTo(canvas.width, i);
+        context.moveTo(offset_x, i + offset_y);
+        context.lineTo(MAP_WIDTH + offset_x, i + offset_y);
         context.stroke();
     }
 
+    
+
+
     // Color the end zones
     context.fillStyle = '#6666FF';
-    context.fillRect(0, 0, END_ZONE_WIDTH, canvas.height);
+    context.fillRect(offset_x, offset_y, END_ZONE_WIDTH, MAP_HEIGHT + Math.max(offset_y, 0));
     context.fillStyle = '#FF6666';
-    context.fillRect(canvas.width-END_ZONE_WIDTH, 0, END_ZONE_WIDTH, canvas.height);
+    context.fillRect(offset_x + MAP_WIDTH-END_ZONE_WIDTH, offset_y, END_ZONE_WIDTH + Math.max(offset_x, 0), MAP_HEIGHT + Math.max(offset_y, 0));
+
+    
+    // Draw all obstacles on the canvas
+    for (let key in game.obstacles) {
+        game.obstacles[key].draw(offset_x, offset_y);
+    }
 
     //Draw goal lines
     context.strokeStyle = '#000000';
     context.lineWidth = 3;
-    context.beginPath();
-    context.moveTo(END_ZONE_WIDTH, 0);
-    context.lineTo(END_ZONE_WIDTH, canvas.height);
+    context.beginPath(); // left goal line
+    context.moveTo(END_ZONE_WIDTH + offset_x, offset_y);
+    context.lineTo(END_ZONE_WIDTH + offset_x, MAP_HEIGHT + offset_y);
     context.stroke();
-    context.beginPath();
-    context.moveTo(canvas.width-END_ZONE_WIDTH, 0);
-    context.lineTo(canvas.width-END_ZONE_WIDTH, canvas.height);
+    context.beginPath(); // right goal line
+    context.moveTo(MAP_WIDTH-END_ZONE_WIDTH + offset_x, offset_y);
+    context.lineTo(MAP_WIDTH-END_ZONE_WIDTH + offset_x, MAP_HEIGHT + offset_y);
     context.stroke();
-    context.beginPath();
-    context.moveTo(canvas.width/2, 0);
-    context.lineTo(canvas.width/2, canvas.height);
+    context.beginPath(); // middle border
+    context.moveTo(MAP_WIDTH/2 + offset_x, offset_y);
+    context.lineTo(MAP_WIDTH/2 + offset_x, MAP_HEIGHT + offset_y);
     context.stroke();
-    
-    // Draw all obstacles on the canvas
-    for (let key in game.obstacles) {
-        game.obstacles[key].draw();
-    }
 
+    context.lineWidth = 5;
+    context.beginPath(); // outer border left right up down
+    context.moveTo(offset_x, offset_y);
+    context.lineTo(offset_x, MAP_HEIGHT + offset_y);
+    context.lineTo(offset_x + MAP_WIDTH, MAP_HEIGHT + offset_y);
+    context.lineTo(offset_x + MAP_WIDTH, offset_y);
+    context.lineTo(offset_x, offset_y);
+    
+    context.stroke();
+
+
+    
     // Draw each entity on the canvas
     for (let key in game.entities) {
-        game.entities[key].draw();
+        game.entities[key].draw(offset_x, offset_y);
     }
 
     
@@ -1383,4 +1437,4 @@ function render_score() {
 
 
 loadApp();
-game_loop_client();
+game.game_loop_client();
